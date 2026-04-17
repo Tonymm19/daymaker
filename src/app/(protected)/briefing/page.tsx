@@ -138,11 +138,11 @@ export default function BriefingPage() {
         <h1 style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontSize: '32px', color: 'var(--text)', marginBottom: '8px' }}>
           {displayMonthStr} Briefing
         </h1>
-        <p style={{ color: 'var(--text2)', maxWidth: '400px', textAlign: 'center', lineHeight: 1.6, marginBottom: '24px' }}>
-          Your intelligence briefing for {displayMonthStr} is ready to be compiled. We'll analyze your recent connections against your network to identify hidden opportunities.
+        <p style={{ color: 'var(--text2)', maxWidth: '440px', textAlign: 'center', lineHeight: 1.6, marginBottom: '24px' }}>
+          No briefing has been generated yet. We&apos;ll analyze your recent connections against your network to surface hidden opportunities, movements, and priority follow-ups.
         </p>
         <button onClick={handleGenerate} className="btn primary" style={{ padding: '12px 24px', fontSize: '15px' }}>
-          Generate Intelligence Briefing
+          Generate your first briefing
         </button>
       </main>
     );

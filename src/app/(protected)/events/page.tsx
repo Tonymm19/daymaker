@@ -666,9 +666,9 @@ export default function EventsPage() {
         ) : events.length === 0 && !anyCalendarConnected ? (
           <div style={{ background: 'var(--surface)', padding: '48px', borderRadius: '8px', border: '1px dashed var(--border)', textAlign: 'center' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>📅</div>
-            <h3 style={{ color: 'var(--text)', marginBottom: '8px', fontSize: '18px', fontFamily: "'Instrument Serif', Georgia, serif" }}>No Event Briefings Yet</h3>
-            <p style={{ color: 'var(--text2)', fontSize: '14px', maxWidth: '400px', margin: '0 auto 24px' }}>Connect your calendar to auto-import upcoming events, or create a briefing manually.</p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <h3 style={{ color: 'var(--text)', marginBottom: '8px', fontSize: '18px', fontFamily: "'Instrument Serif', Georgia, serif" }}>Create your first event briefing</h3>
+            <p style={{ color: 'var(--text2)', fontSize: '14px', maxWidth: '420px', margin: '0 auto 24px', lineHeight: 1.6 }}>Connect your calendar to auto-import upcoming events, or create a briefing manually from a pasted attendee list.</p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
               <button className="btn" onClick={() => setShowCalendarModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
@@ -678,7 +678,14 @@ export default function EventsPage() {
               <button className="btn primary" onClick={handleManualCreate}>Create Manually</button>
             </div>
           </div>
-        ) : events.length === 0 && anyCalendarConnected ? null : (
+        ) : events.length === 0 && anyCalendarConnected ? (
+          <div style={{ background: 'var(--surface)', padding: '32px', borderRadius: '8px', border: '1px dashed var(--border)', textAlign: 'center' }}>
+            <div style={{ fontSize: '36px', marginBottom: '12px' }}>✨</div>
+            <h3 style={{ color: 'var(--text)', marginBottom: '8px', fontSize: '18px', fontFamily: "'Instrument Serif', Georgia, serif" }}>Create your first event briefing</h3>
+            <p style={{ color: 'var(--text2)', fontSize: '13px', maxWidth: '420px', margin: '0 auto 20px', lineHeight: 1.6 }}>Generate a pre-brief from any calendar event above, or create one manually.</p>
+            <button className="btn primary" onClick={handleManualCreate}>+ New Event Briefing</button>
+          </div>
+        ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: '12px' }}>
             {events.map(ev => {
               const dateStr = ev.eventDate ? new Date((ev.eventDate as any).seconds * 1000).toLocaleDateString() : 'No date';

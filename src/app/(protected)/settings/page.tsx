@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/firebase/AuthContext';
 import { useUser } from '@/lib/hooks/useUser';
+import { useContacts } from '@/lib/hooks/useContacts';
 import CsvUpload from '@/components/import/CsvUpload';
 import Modal from '@/components/ui/Modal';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -12,6 +13,7 @@ import { getAuth } from '@/lib/firebase/config';
 export default function SettingsPage() {
   const { user } = useAuth();
   const { userDoc, mutate, isLoading } = useUser();
+  const { contacts, isLoading: contactsLoading } = useContacts();
   const [northStarInput, setNorthStarInput] = useState('');
   const [isSavingNS, setIsSavingNS] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
@@ -24,6 +26,21 @@ export default function SettingsPage() {
       setNorthStarInput(userDoc.northStar || '');
     }
   }, [userDoc, northStarInput, isSavingNS]);
+
+  // Sync the user doc's contactCount with the actual subcollection count.
+  // The import pipeline writes this field, but it can drift after auth-driven
+  // user-doc recreation or partial imports. One-time repair on Settings load.
+  const actualContactCount = contacts?.length ?? 0;
+  useEffect(() => {
+    if (!user?.uid || contactsLoading) return;
+    if (userDoc && userDoc.contactCount !== actualContactCount) {
+      const db = getDb();
+      if (!db) return;
+      updateDoc(doc(db, 'users', user.uid), { contactCount: actualContactCount })
+        .then(() => mutate())
+        .catch((err) => console.error('Failed to sync contactCount', err));
+    }
+  }, [user?.uid, userDoc, actualContactCount, contactsLoading, mutate]);
 
   const handleSaveNorthStar = async () => {
     if (!user || userDoc?.northStar === northStarInput) return;
@@ -201,7 +218,7 @@ export default function SettingsPage() {
               <div style={{ padding: '16px', background: 'var(--darker)', border: '1px solid var(--border)', borderRadius: '8px' }}>
                 <div style={{ fontSize: '12px', color: 'var(--muted)' }}>LinkedIn Network</div>
                 <div style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text)', marginTop: '4px' }}>
-                  {userDoc?.contactCount?.toLocaleString() || 0} Contacts
+                  {contactsLoading ? '...' : `${actualContactCount.toLocaleString()} Contacts`}
                 </div>
               </div>
               <div style={{ padding: '16px', background: 'var(--darker)', border: '1px solid var(--border)', borderRadius: '8px' }}>
@@ -229,7 +246,7 @@ export default function SettingsPage() {
               <h3 style={{ margin: 0, fontSize: '18px', color: '#e9d5ff' }}>Reflections Match</h3>
             </div>
             <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#c084fc', lineHeight: 1.5 }}>
-              Connect your Matchwise Psychological Roster. Phase 1 structural pipelines mapped successfully against AI categorization constraints.
+              Connect your Reflections Match digital twin to enrich Daymaker&apos;s understanding of who you are. Your persona traits will personalize AI recommendations, event briefings, and network analysis.
             </p>
             <div style={{ display: 'inline-block', padding: '6px 12px', background: 'rgba(168, 85, 247, 0.2)', borderRadius: '16px', color: '#d8b4fe', fontSize: '12px', fontWeight: 600 }}>
               Status: Disconnected

@@ -199,9 +199,60 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Empty state — no contacts uploaded yet */}
+        {!isLoading && stats.total === 0 && (
+          <div
+            style={{
+              marginTop: '48px',
+              padding: '48px 32px',
+              background: 'var(--surface)',
+              border: '1px dashed var(--border)',
+              borderRadius: '12px',
+              textAlign: 'center',
+            }}
+          >
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🌅</div>
+            <h2
+              style={{
+                fontFamily: "'Instrument Serif', Georgia, serif",
+                fontSize: '24px',
+                color: 'var(--text)',
+                margin: '0 0 8px 0',
+              }}
+            >
+              Upload your LinkedIn data to get started
+            </h2>
+            <p
+              style={{
+                color: 'var(--text2)',
+                fontSize: '14px',
+                maxWidth: '460px',
+                margin: '0 auto 24px',
+                lineHeight: 1.6,
+              }}
+            >
+              Import your LinkedIn connections to unlock AI-powered network intelligence, briefings, and Deep Dive analyses.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button className="btn primary" onClick={() => setShowUpload(true)} style={{ padding: '10px 20px', fontSize: '14px' }}>
+                Upload CSV
+              </button>
+              <a
+                href="https://www.linkedin.com/mypreferences/d/download-my-data"
+                target="_blank"
+                rel="noreferrer"
+                className="btn"
+                style={{ padding: '10px 20px', fontSize: '14px', textDecoration: 'none' }}
+              >
+                Get LinkedIn Export ↗
+              </a>
+            </div>
+          </div>
+        )}
+
         {/* Dashboard Content */}
-        <div id="sec-dashboard" style={{ marginTop: '32px' }}>
-          
+        <div id="sec-dashboard" style={{ marginTop: '32px', display: !isLoading && stats.total === 0 ? 'none' : undefined }}>
+
           {userDoc?.plan === 'free' && (
             <div style={{
               background: 'var(--orange-dim)',

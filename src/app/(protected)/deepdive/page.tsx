@@ -136,12 +136,26 @@ export default function DeepDiveIndex() {
       {/* History Section */}
       <div>
         <h3 style={{ fontSize: '16px', color: 'var(--text)', marginBottom: '16px' }}>Past Analyses</h3>
-        
+
         {loadingHistory ? (
           <div style={{ color: 'var(--text2)' }}>Loading history...</div>
         ) : pastDeepDives.length === 0 ? (
-          <div className="card" style={{ padding: '32px', textAlign: 'center', color: 'var(--text2)' }}>
-            You haven't run any Deep Dives yet.
+          <div
+            className="card"
+            style={{
+              padding: '40px 24px',
+              textAlign: 'center',
+              background: 'var(--surface)',
+              border: '1px dashed var(--border)',
+            }}
+          >
+            <div style={{ fontSize: '36px', marginBottom: '12px' }}>🔬</div>
+            <div style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontSize: '20px', color: 'var(--text)', marginBottom: '8px' }}>
+              Run your first Deep Dive analysis
+            </div>
+            <p style={{ color: 'var(--text2)', fontSize: '13px', maxWidth: '380px', margin: '0 auto', lineHeight: 1.6 }}>
+              Pick any contact above to start a 4-round agent-to-agent synergy analysis against your North Star.
+            </p>
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>

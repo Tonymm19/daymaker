@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '@/lib/firebase/AuthContext';
 import { ensureUserDocument } from '@/lib/firebase/auth';
 import TopNav from '@/components/TopNav';
+import { BRAND } from '@/lib/brand.config';
 
 function ProtectedContent({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -46,11 +47,22 @@ function ProtectedContent({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--darker)' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--darker)', display: 'flex', flexDirection: 'column' }}>
       <TopNav />
-      <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '16px 24px 40px' }}>
+      <main style={{ maxWidth: '1200px', width: '100%', margin: '0 auto', padding: '16px 24px 40px', flex: 1 }}>
         {children}
       </main>
+      <footer
+        style={{
+          borderTop: '1px solid var(--border)',
+          padding: '20px 24px',
+          textAlign: 'center',
+          color: 'var(--muted)',
+          fontSize: '12px',
+        }}
+      >
+        © 2026 {BRAND.company} · {BRAND.name}
+      </footer>
     </div>
   );
 }
