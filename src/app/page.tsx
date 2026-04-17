@@ -75,7 +75,7 @@ export default function LandingPage() {
           className="mt-8 text-sm max-w-2xl mx-auto"
           style={{ color: 'var(--text2)', lineHeight: 1.6 }}
         >
-          Built for professionals with 2,000–9,000+ LinkedIn connections who want to turn their
+          Built for professionals with LinkedIn and events connections who want to turn their
           network into their competitive advantage.
         </p>
 
