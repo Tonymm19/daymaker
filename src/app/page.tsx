@@ -1,9 +1,30 @@
 import { BRAND } from '@/lib/brand.config';
 
+const FEATURES = [
+  {
+    icon: '🔍',
+    title: 'Network Intelligence',
+    body:
+      "Search and query your entire LinkedIn network with AI. Ask questions like 'Who do I know in robotics?' and get actionable answers with conversation starters.",
+  },
+  {
+    icon: '📋',
+    title: 'Event Briefings',
+    body:
+      'Prepare for any event in minutes. Get scored attendee rankings, conversation starters, and strategic recommendations for who to meet.',
+  },
+  {
+    icon: '⚡',
+    title: 'Deep Dive Synergy',
+    body:
+      'Agent-to-agent synergy analysis between you and any contact. Discover mutual connections, collaboration opportunities, and next steps.',
+  },
+];
+
 export default function LandingPage() {
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center px-6">
-      <div className="max-w-2xl text-center animate-fade-in">
+    <main className="min-h-screen flex flex-col items-center justify-center px-6 py-12">
+      <div className="max-w-5xl w-full text-center animate-fade-in">
         {/* Sun icon */}
         <div className="mx-auto mb-6 w-16 h-16 rounded-full bg-gradient-to-br from-orange to-amber flex items-center justify-center">
           <svg viewBox="0 0 24 24" fill="none" stroke="#0E1B24" strokeWidth="2" className="w-8 h-8">
@@ -21,7 +42,7 @@ export default function LandingPage() {
           {BRAND.tagline}
         </p>
 
-        <p className="text-sm mb-8" style={{ color: 'var(--muted)', lineHeight: 1.7 }}>
+        <p className="text-sm mb-8 max-w-2xl mx-auto" style={{ color: 'var(--muted)', lineHeight: 1.7 }}>
           {BRAND.description}
         </p>
 
@@ -35,7 +56,7 @@ export default function LandingPage() {
               border: '1px solid var(--orange)',
             }}
           >
-            Get Started — ${BRAND.proPriceMonthly}/month
+            Get Started Free
           </a>
           <a
             href="/login"
@@ -50,7 +71,47 @@ export default function LandingPage() {
           </a>
         </div>
 
-        <p className="mt-12 text-xs" style={{ color: 'var(--muted)' }}>
+        <p
+          className="mt-8 text-sm max-w-2xl mx-auto"
+          style={{ color: 'var(--text2)', lineHeight: 1.6 }}
+        >
+          Built for professionals with 2,000–9,000+ LinkedIn connections who want to turn their
+          network into their competitive advantage.
+        </p>
+
+        <div
+          className="mt-10 grid gap-4 text-left"
+          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}
+        >
+          {FEATURES.map((f) => (
+            <div
+              key={f.title}
+              style={{
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '24px',
+              }}
+            >
+              <div style={{ fontSize: '24px', marginBottom: '12px' }}>{f.icon}</div>
+              <div
+                style={{
+                  fontFamily: "'Instrument Serif', Georgia, serif",
+                  fontSize: '20px',
+                  color: 'var(--text)',
+                  marginBottom: '8px',
+                }}
+              >
+                {f.title}
+              </div>
+              <div style={{ fontSize: '13px', color: 'var(--text2)', lineHeight: 1.6 }}>
+                {f.body}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-10 text-xs" style={{ color: 'var(--muted)' }}>
           Built by{' '}
           <span style={{ color: 'var(--orange)' }}>{BRAND.company}</span>
         </p>
