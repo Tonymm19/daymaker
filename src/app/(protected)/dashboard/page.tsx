@@ -133,8 +133,9 @@ export default function DashboardPage() {
         const errPayload = await resetRes.json().catch(() => ({ error: resetRes.statusText }));
         throw new Error(errPayload.error || `Reset failed (HTTP ${resetRes.status})`);
       }
-      // Reflect the reset in the UI before the categorization loop starts.
-      mutate();
+      // Skip mutate() here to avoid a full re-read of ~9k contacts mid-flow —
+      // handleCategorize's single mutate() after the loop is enough. Progress
+      // comes from API response data via setCategorizeProgress, not Firestore.
     } catch (err) {
       console.error('Re-categorize reset failed', err);
       setIsCategorizing(false);

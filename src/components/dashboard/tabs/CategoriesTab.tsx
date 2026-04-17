@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Contact } from '@/lib/types';
 import Link from 'next/link';
+
+const PAGE_SIZE = 50;
 
 // Brand canonical categories from config
 const CATEGORIES = [
@@ -13,14 +15,15 @@ type Category = typeof CATEGORIES[number];
 
 export default function CategoriesTab({ contacts, onSelectContact }: { contacts: Contact[], onSelectContact?: (c: Contact) => void }) {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   // Group contacts by category
   const categoryCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    
+
     // Initialize all canonical to 0
     CATEGORIES.forEach(c => counts.set(c, 0));
-    
+
     contacts.forEach(contact => {
       contact.categories?.forEach(cat => {
         if (counts.has(cat)) {
@@ -38,6 +41,16 @@ export default function CategoriesTab({ contacts, onSelectContact }: { contacts:
     return contacts.filter(c => c.categories?.includes(selectedCategory));
   }, [contacts, selectedCategory]);
 
+  // Reset pagination when user picks a different category.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [selectedCategory]);
+
+  const visibleContacts = useMemo(
+    () => selectedContacts.slice(0, visibleCount),
+    [selectedContacts, visibleCount]
+  );
+
   return (
     <div id="dsub-categories">
       {!selectedCategory ? (
@@ -50,8 +63,8 @@ export default function CategoriesTab({ contacts, onSelectContact }: { contacts:
           {CATEGORIES.map(cat => {
             const count = categoryCounts.get(cat) || 0;
             return (
-              <div 
-                key={cat} 
+              <div
+                key={cat}
                 className="card"
                 onClick={() => setSelectedCategory(cat)}
                 style={{
@@ -97,7 +110,7 @@ export default function CategoriesTab({ contacts, onSelectContact }: { contacts:
         // List View showing matching contacts
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-            <button 
+            <button
               className="btn"
               onClick={() => setSelectedCategory(null)}
               style={{
@@ -118,7 +131,7 @@ export default function CategoriesTab({ contacts, onSelectContact }: { contacts:
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-            {selectedContacts.map(contact => (
+            {visibleContacts.map(contact => (
               <div key={contact.contactId} className="c-card card" onClick={() => onSelectContact && onSelectContact(contact)} style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px', cursor: 'pointer' }}>
                 <div className="c-hdr">
                   <div className="c-name" style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text)' }}>
@@ -141,6 +154,18 @@ export default function CategoriesTab({ contacts, onSelectContact }: { contacts:
               </div>
             ))}
           </div>
+
+          {visibleCount < selectedContacts.length && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '24px' }}>
+              <button
+                className="btn"
+                onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
+                style={{ padding: '10px 20px', fontSize: '14px' }}
+              >
+                Load More ({selectedContacts.length - visibleCount} remaining)
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
