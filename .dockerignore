@@ -1,0 +1,55 @@
+# Dependencies — installed fresh inside the image
+node_modules
+npm-debug.log*
+yarn-error.log*
+
+# Build artifacts — regenerated inside the image
+.next
+out
+dist
+build
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Local env (secrets live in Secret Manager / Cloud Run, not in the image)
+.env
+.env.*
+!.env.local.example
+
+# Editors / OS
+.vscode
+.idea
+*.swp
+.DS_Store
+Thumbs.db
+
+# Docs — keep the deployment lean
+*.md
+README*
+CHANGELOG*
+LICENSE*
+
+# Tests / coverage
+coverage
+.nyc_output
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+vitest.config.ts
+
+# Deployment tooling — not needed at runtime
+Dockerfile
+.dockerignore
+.gcloudignore
+cloudbuild.yaml
+deploy.sh
+
+# CI / misc
+.github
+.vercel
+scripts

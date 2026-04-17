@@ -1,0 +1,195 @@
+'use client';
+
+/**
+ * Signup page — email/password + Google sign-in.
+ * Redirects to /dashboard if already authenticated.
+ */
+
+import { useState, useEffect, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { signUp, signInWithGoogle } from '@/lib/firebase/auth';
+import { onAuthStateChanged } from '@/lib/firebase/auth';
+
+export default function SignupPage() {
+  const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const router = useRouter();
+
+  // If already signed in, redirect to dashboard
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged((user) => {
+      if (user) {
+        router.replace('/dashboard');
+      } else {
+        setChecking(false);
+      }
+    });
+    return unsubscribe;
+  }, [router]);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+
+    setLoading(true);
+    const result = await signUp(email, password, displayName);
+    if (!result.success) {
+      setError(result.error?.message || 'Sign up failed. Please try again.');
+    }
+    setLoading(false);
+  };
+
+  const handleGoogle = async () => {
+    setError('');
+    setLoading(true);
+    const result = await signInWithGoogle();
+    if (!result.success) {
+      setError(result.error?.message || 'Google sign in failed.');
+    }
+    setLoading(false);
+  };
+
+  if (checking) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner" />
+      </div>
+    );
+  }
+
+  return (
+    <main
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
+        background: 'var(--darker)',
+      }}
+    >
+      {/* Logo */}
+      <div style={{ marginBottom: '32px', textAlign: 'center' }}>
+        <div
+          style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, var(--orange), #c47010)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 12px',
+          }}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="#0E1B24" strokeWidth="2" width="24" height="24">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+        </div>
+        <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--orange)', letterSpacing: '-0.5px' }}>
+          Daymaker <span style={{ color: 'var(--text)', fontWeight: 400 }}>Connect</span>
+        </div>
+      </div>
+
+      <div className="auth-card">
+        <h1
+          style={{
+            fontFamily: "'Instrument Serif', Georgia, serif",
+            fontSize: '24px',
+            fontWeight: 400,
+            color: 'var(--text)',
+            marginBottom: '4px',
+          }}
+        >
+          Create Account
+        </h1>
+        <p style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '24px' }}>
+          Get started with Daymaker Connect
+        </p>
+
+        {error && <div className="auth-error">{error}</div>}
+
+        <form onSubmit={handleSubmit}>
+          <input
+            id="signup-name"
+            type="text"
+            className="auth-input"
+            placeholder="Full name"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            required
+            autoComplete="name"
+          />
+          <input
+            id="signup-email"
+            type="email"
+            className="auth-input"
+            placeholder="Email address"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+          />
+          <input
+            id="signup-password"
+            type="password"
+            className="auth-input"
+            placeholder="Password (min 6 characters)"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="new-password"
+            minLength={6}
+          />
+          <button
+            id="signup-submit"
+            type="submit"
+            className="auth-btn"
+            disabled={loading}
+          >
+            {loading ? 'Creating account...' : 'Create Account'}
+          </button>
+        </form>
+
+        <div className="auth-divider">or</div>
+
+        <button
+          id="signup-google"
+          type="button"
+          className="auth-btn-google"
+          onClick={handleGoogle}
+          disabled={loading}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4" />
+              <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853" />
+              <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.997 8.997 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05" />
+              <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335" />
+            </svg>
+            Continue with Google
+          </span>
+        </button>
+
+        <p style={{ marginTop: '20px', textAlign: 'center', fontSize: '13px', color: 'var(--text2)' }}>
+          Already have an account?{' '}
+          <Link href="/login" style={{ color: 'var(--orange)', fontWeight: 600, textDecoration: 'none' }}>
+            Sign in
+          </Link>
+        </p>
+      </div>
+    </main>
+  );
+}

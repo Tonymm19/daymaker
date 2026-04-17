@@ -1,26 +1,471 @@
 @import "tailwindcss";
 
+/* =============================================
+   DAYMAKER CONNECT — GLOBAL STYLES
+   Source: Daymaker_Connect_Combined_4.html prototype
+   ============================================= */
+
+/* --- CSS Custom Properties (prototype-exact) --- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Core brand */
+  --orange: #F9941E;
+  --orange-light: #FAAB44;
+  --orange-dim: rgba(249, 148, 30, 0.12);
+
+  /* Surfaces (dark theme) */
+  --dark: #141210;
+  --darker: #0F0E0C;
+  --surface: #1C1A17;
+  --surface2: #252320;
+
+  /* Borders */
+  --border: #3A3530;
+  --border-hi: rgba(249, 148, 30, 0.4);
+
+  /* Text */
+  --text: #F2EDE6;
+  --text2: #A89E90;
+  --muted: #6B6155;
+
+  /* Status */
+  --green: #4ADE80;
+  --green-dim: rgba(74, 222, 128, 0.15);
+  --red: #F87171;
+  --red-dim: rgba(248, 113, 113, 0.15);
+  --blue: #60A5FA;
+  --blue-dim: rgba(96, 165, 250, 0.15);
+  --amber: #FBBF24;
+
+  /* Reflections Match integration */
+  --rm-purple: #4A4660;
+  --rm-purple-light: #7C6FE0;
+  --rm-purple-dim: #C4BCF0;
 }
 
+/* --- Tailwind v4 Theme Tokens --- */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Colors */
+  --color-orange: #F9941E;
+  --color-orange-light: #FAAB44;
+  --color-orange-dim: rgba(249, 148, 30, 0.12);
+
+  --color-dark: #141210;
+  --color-dark-deeper: #0F0E0C;
+
+  --color-surface: #1C1A17;
+  --color-surface-2: #252320;
+
+  --color-border: #3A3530;
+  --color-border-hi: rgba(249, 148, 30, 0.4);
+
+  --color-text: #F2EDE6;
+  --color-text-2: #A89E90;
+  --color-text-muted: #6B6155;
+
+  --color-green: #4ADE80;
+  --color-green-dim: rgba(74, 222, 128, 0.15);
+
+  --color-red: #F87171;
+  --color-red-dim: rgba(248, 113, 113, 0.15);
+
+  --color-blue: #60A5FA;
+  --color-blue-dim: rgba(96, 165, 250, 0.15);
+
+  --color-amber: #FBBF24;
+
+  --color-rm-purple: #4A4660;
+  --color-rm-purple-light: #7C6FE0;
+  --color-rm-purple-dim: #C4BCF0;
+  --color-rm-purple-bg: rgba(124, 111, 224, 0.08);
+
+  /* Fonts */
+  --font-sans: 'DM Sans', sans-serif;
+  --font-serif: 'Instrument Serif', Georgia, serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Border radius */
+  --radius-card: 10px;
+  --radius-btn: 6px;
+  --radius-input: 8px;
+  --radius-badge: 4px;
+  --radius-tag: 4px;
+
+  /* Max width */
+  --max-width-content: 1200px;
+
+  /* Animations */
+  --animate-fade-in: fadeIn 0.3s ease;
+  --animate-fade-in-slow: fadeIn 0.5s ease;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* --- Keyframes --- */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
+/* --- Base Styles --- */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--darker);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* --- Scrollbar --- */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+/* --- Focus styles --- */
+*:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 2px;
+}
+
+/* =============================================
+   TOP NAVIGATION — from prototype
+   ============================================= */
+.topnav {
+  background: var(--dark);
+  border-bottom: 2px solid var(--orange);
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topnav-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.logo-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 24px 12px 0;
+  border-right: 1px solid var(--border);
+  margin-right: 8px;
+  flex-shrink: 0;
+  text-decoration: none;
+}
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--orange), #c47010);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.logo-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.logo-text {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--orange);
+  letter-spacing: -0.5px;
+}
+.logo-text span {
+  color: var(--text);
+  font-weight: 400;
+}
+.nav-tabs {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  flex: 1;
+}
+.nav-tab {
+  padding: 14px 20px;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+  transition: all 0.2s;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  text-decoration: none;
+}
+.nav-tab:hover {
+  color: var(--text2);
+}
+.nav-tab.active {
+  color: var(--orange);
+  border-bottom-color: var(--orange);
+}
+.nav-user {
+  margin-left: auto;
+  padding: 8px 0 8px 16px;
+  border-left: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.nav-user-name {
+  font-size: 12px;
+  color: var(--text2);
+  font-weight: 600;
+}
+.nav-user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--orange-dim);
+  border: 1px solid var(--orange);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--orange);
+}
+
+/* =============================================
+   RM CONNECT BUTTON — from prototype
+   ============================================= */
+.rm-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 6px 6px;
+  background: linear-gradient(135deg, #2D2B3D, #1E1C2E);
+  border: 1px solid #4A4660;
+  border-radius: 8px;
+  color: #E0DCF0;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.3s;
+  text-decoration: none;
+  margin-right: 12px;
+  flex-shrink: 0;
+  letter-spacing: 0.3px;
+}
+.rm-btn:hover {
+  border-color: #7C6FE0;
+  background: linear-gradient(135deg, #363350, #252340);
+  box-shadow: 0 0 12px rgba(124, 111, 224, 0.25);
+  transform: translateY(-1px);
+}
+.rm-status {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4ADE80;
+  box-shadow: 0 0 6px #4ADE80;
+  flex-shrink: 0;
+}
+
+/* =============================================
+   SHARED COMPONENTS — from prototype
+   ============================================= */
+.section-label {
+  font-size: 11px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--orange);
+  margin-bottom: 6px;
+  font-weight: 700;
+}
+.section-title {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 8px;
+  transition: all 0.2s;
+}
+.card:hover {
+  border-color: var(--border-hi);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.btn {
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text2);
+}
+.btn:hover {
+  border-color: var(--orange);
+  color: var(--orange);
+}
+.btn.primary {
+  background: var(--orange);
+  color: var(--dark);
+  border-color: var(--orange);
+}
+.btn.primary:hover {
+  background: var(--orange-light);
+}
+.search-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+.search-input:focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 2px var(--orange-dim);
+}
+
+/* =============================================
+   LOADING SPINNER
+   ============================================= */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.loading-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--darker);
+  gap: 16px;
+}
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--orange);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* =============================================
+   AUTH FORMS
+   ============================================= */
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 36px 32px;
+}
+.auth-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--darker);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s;
+  margin-bottom: 12px;
+}
+.auth-input:focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 2px var(--orange-dim);
+}
+.auth-input::placeholder {
+  color: var(--muted);
+}
+.auth-btn {
+  width: 100%;
+  padding: 12px 20px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+  border: none;
+  background: var(--orange);
+  color: var(--dark);
+}
+.auth-btn:hover {
+  background: var(--orange-light);
+}
+.auth-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.auth-btn-google {
+  width: 100%;
+  padding: 12px 20px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text2);
+  margin-top: 8px;
+}
+.auth-btn-google:hover {
+  border-color: var(--orange);
+  color: var(--orange);
+}
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.auth-error {
+  padding: 10px 14px;
+  background: var(--red-dim);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 6px;
+  color: var(--red);
+  font-size: 13px;
+  margin-bottom: 16px;
 }

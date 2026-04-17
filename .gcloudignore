@@ -1,0 +1,51 @@
+# Controls which files are uploaded to Cloud Build as the build context.
+# Keep this roughly aligned with .dockerignore, minus things the build
+# pipeline needs (Dockerfile, cloudbuild.yaml).
+
+# Dependencies — installed fresh in the builder stage
+node_modules
+npm-debug.log*
+yarn-error.log*
+
+# Build artifacts
+.next
+out
+dist
+build
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Local env — Cloud Run reads these from Secret Manager, not from source
+.env
+.env.*
+!.env.local.example
+
+# Editors / OS
+.vscode
+.idea
+*.swp
+.DS_Store
+Thumbs.db
+
+# Docs
+*.md
+README*
+CHANGELOG*
+LICENSE*
+
+# Tests / coverage (not needed for a production build)
+coverage
+.nyc_output
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+vitest.config.ts
+
+# Misc
+.vercel
+scripts
