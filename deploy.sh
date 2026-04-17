@@ -31,6 +31,11 @@ if [[ -z "${PROJECT_ID:-}" ]]; then
   exit 1
 fi
 
+# Preserve any NEXT_PUBLIC_APP_URL set by the caller (e.g.
+# `NEXT_PUBLIC_APP_URL=https://… ./deploy.sh`) so sourcing .env.local below
+# doesn't clobber the production URL with the dev value.
+CALLER_NEXT_PUBLIC_APP_URL="${NEXT_PUBLIC_APP_URL:-}"
+
 # Load NEXT_PUBLIC_* from .env.local if present. They are public keys but
 # still need to be in scope here so cloudbuild.yaml can bake them into the
 # client bundle at build time. Server secrets live in Secret Manager — don't
@@ -41,6 +46,11 @@ if [[ -f .env.local ]]; then
   # shellcheck disable=SC1091
   source .env.local
   set +a
+fi
+
+# Caller's NEXT_PUBLIC_APP_URL wins over the value in .env.local.
+if [[ -n "$CALLER_NEXT_PUBLIC_APP_URL" ]]; then
+  NEXT_PUBLIC_APP_URL="$CALLER_NEXT_PUBLIC_APP_URL"
 fi
 
 # Validate build-time envs are present.

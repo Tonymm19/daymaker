@@ -83,8 +83,8 @@ export default function SearchTab({ contacts, onSelectContact }: { contacts: Con
             </div>
 
             <div className="c-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: 'auto', paddingTop: '8px' }}>
-              {contact.categories?.map(tag => (
-                <span key={tag} className="c-tag" style={{
+              {contact.categories?.map((tag, i) => (
+                <span key={`${tag}-${i}`} className="c-tag" style={{
                   fontSize: '10px',
                   padding: '4px 8px',
                   background: 'var(--orange-dim)',
