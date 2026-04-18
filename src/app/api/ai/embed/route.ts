@@ -1,89 +1,119 @@
-import { NextResponse } from 'next/server';
+/**
+ * DAYMAKER CONNECT — Embedding Generation API
+ *
+ * POST /api/ai/embed
+ *
+ * Resumable, chunked embedding pipeline. Fetches a bounded slice of contacts
+ * that are missing an embedding (`embedding == null`), runs them through
+ * OpenAI `text-embedding-3-small` in internal sub-batches, and writes the
+ * vectors back to Firestore.
+ *
+ * Request body: { limit?: number }  — max contacts to process this call
+ * Response:     { embedded: number, remaining: number, errors?: string[] }
+ *
+ * The client loops until `remaining === 0`, which keeps any single request
+ * well under a serverless timeout regardless of network size.
+ */
 
-import { getAuth } from 'firebase-admin/auth';
+import { NextRequest, NextResponse } from 'next/server';
 import { embedBatch } from '@/lib/ai/rag';
-import { EMBEDDING_BATCH_SIZE, FIRESTORE_BATCH_LIMIT } from '@/lib/constants';
+import { EMBEDDING_BATCH_SIZE } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+const DEFAULT_LIMIT = 200;
+
+export async function POST(req: NextRequest) {
   try {
-    const { adminDb } = await import('@/lib/firebase/admin');
-    
-    const authHeader = request.headers.get('Authorization');
+    const { adminDb, adminAuth } = await import('@/lib/firebase/admin');
+
+    const authHeader = req.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const token = authHeader.split('Bearer ')[1];
-    const decodedToken = await getAuth().verifyIdToken(token);
-    const uid = decodedToken.uid;
 
-    if (!adminDb) {
-      return NextResponse.json({ error: 'Database uninitialized' }, { status: 500 });
+    const idToken = authHeader.substring(7);
+    let uid: string;
+    try {
+      const decoded = await adminAuth.verifyIdToken(idToken);
+      uid = decoded.uid;
+    } catch {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    // 1. Fetch contacts missing embeddings
+    const body = await req.json().catch(() => ({}));
+    const rawLimit = body?.limit;
+    const limit =
+      typeof rawLimit === 'number' && rawLimit > 0
+        ? Math.floor(rawLimit)
+        : DEFAULT_LIMIT;
+
     const contactsRef = adminDb.collection(`users/${uid}/contacts`);
-    // Note: A real implementation might require an index for "where('embedding', '==', null)",
-    // but since we keep collection sizes manageable (<10k), we can load and filter, 
-    // or we query where embeddingText does not exist. 
-    // For absolute robustness without composite index prerequisites, we will load all docs.
-    const snapshot = await contactsRef.get();
-    
-    // Filter docs that need embedding
-    const docsToEmbed = snapshot.docs.filter(doc => {
-      const data = doc.data();
-      return !data.embedding || typeof data.embedding !== 'object' || data.embedding.length === 0;
-    });
 
-    if (docsToEmbed.length === 0) {
-      return NextResponse.json({ success: true, count: 0, message: 'All contacts are embedded' });
+    // Count-only helper so the client can drive the loop with accurate progress.
+    const countRemaining = async (): Promise<number> => {
+      const snap = await contactsRef.where('embedding', '==', null).count().get();
+      return snap.data().count;
+    };
+
+    // Fetch the next slice of contacts needing embeddings. Relies on `embedding`
+    // being explicitly set to null at ingest time (confirmed via diagnostic).
+    const snapshot = await contactsRef
+      .where('embedding', '==', null)
+      .limit(limit)
+      .get();
+
+    if (snapshot.empty) {
+      return NextResponse.json({ embedded: 0, remaining: await countRemaining(), errors: [] });
     }
 
+    const docsToEmbed = snapshot.docs;
     let processedCount = 0;
-    let errors: string[] = [];
+    const errors: string[] = [];
 
-    // 2. Process in batches
+    // Chunk into OpenAI-sized sub-batches so a single request can process
+    // more than EMBEDDING_BATCH_SIZE contacts under one HTTP call.
     for (let i = 0; i < docsToEmbed.length; i += EMBEDDING_BATCH_SIZE) {
       const batchDocs = docsToEmbed.slice(i, i + EMBEDDING_BATCH_SIZE);
-      
-      // Build text for each
+
       const texts = batchDocs.map(doc => {
         const d = doc.data();
-        const categoriesStr = d.categories && Array.isArray(d.categories) ? d.categories.join(', ') : 'None';
+        const categoriesStr =
+          Array.isArray(d.categories) && d.categories.length > 0
+            ? d.categories.join(', ')
+            : 'None';
         return `${d.firstName || ''} ${d.lastName || ''}, ${d.position || 'Unknown Role'} at ${d.company || 'Unknown Company'}. Categories: ${categoriesStr}`;
       });
 
       try {
-        // Run OpenAI SDK
         const embeddings = await embedBatch(texts);
-        
-        // Write back to Firestore
+
         const fbBatch = adminDb.batch();
         for (let j = 0; j < batchDocs.length; j++) {
-          const docRef = batchDocs[j].ref;
-          fbBatch.update(docRef, {
+          fbBatch.update(batchDocs[j].ref, {
             embedding: embeddings[j],
-            embeddingText: texts[j]
+            embeddingText: texts[j],
           });
         }
         await fbBatch.commit();
         processedCount += batchDocs.length;
-        
       } catch (err: unknown) {
-        console.error('Embedding batch failed:', err);
-        errors.push(err instanceof Error ? err.message : 'Unknown embedding error');
+        console.error('[Embed] Sub-batch failed:', err);
+        errors.push(
+          `Failed at offset ${i}: ${err instanceof Error ? err.message : String(err)}`
+        );
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      embedded: processedCount,
-      errors: errors.length > 0 ? errors : undefined
-    });
+    const remaining = await countRemaining();
 
+    return NextResponse.json({
+      embedded: processedCount,
+      remaining,
+      errors,
+    });
   } catch (error: unknown) {
-    console.error('Embeddings generation error:', error);
+    console.error('[Embed API] Fatal error:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to generate embeddings' },
       { status: 500 }

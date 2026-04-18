@@ -11,7 +11,19 @@ export default function SearchTab({ contacts, onSelectContact }: { contacts: Con
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const filteredContacts = useMemo(() => {
-    if (!debouncedQuery) return contacts;
+    if (!debouncedQuery) {
+      // Default view: most recently connected first. Alphabetical sort surfaced
+      // names starting with underscores, dashes, or periods at the top.
+      const connectedMs = (c: Contact): number => {
+        const co = c.connectedOn as any;
+        if (!co) return 0;
+        if (typeof co.toDate === 'function') return co.toDate().getTime();
+        if (typeof co.seconds === 'number') return co.seconds * 1000;
+        const d = new Date(co);
+        return isNaN(d.getTime()) ? 0 : d.getTime();
+      };
+      return [...contacts].sort((a, b) => connectedMs(b) - connectedMs(a));
+    }
     const lowerQuery = debouncedQuery.toLowerCase();
 
     return contacts.filter(c =>

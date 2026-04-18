@@ -246,11 +246,27 @@ export default function SettingsPage() {
               <h3 style={{ margin: 0, fontSize: '18px', color: '#e9d5ff' }}>Reflections Match</h3>
             </div>
             <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#c084fc', lineHeight: 1.5 }}>
-              Connect your Reflections Match digital twin to enrich Daymaker&apos;s understanding of who you are. Your persona traits will personalize AI recommendations, event briefings, and network analysis.
+              Reflections Match integration is coming in a future update. Your digital twin persona traits will personalize all AI recommendations.
             </p>
-            <div style={{ display: 'inline-block', padding: '6px 12px', background: 'rgba(168, 85, 247, 0.2)', borderRadius: '16px', color: '#d8b4fe', fontSize: '12px', fontWeight: 600 }}>
-              Status: Disconnected
-            </div>
+            <button
+              disabled
+              aria-disabled="true"
+              style={{
+                padding: '8px 16px',
+                background: 'rgba(168, 85, 247, 0.15)',
+                border: '1px solid rgba(168, 85, 247, 0.4)',
+                borderRadius: '20px',
+                color: '#d8b4fe',
+                fontSize: '12px',
+                fontWeight: 600,
+                letterSpacing: '0.5px',
+                textTransform: 'uppercase',
+                cursor: 'not-allowed',
+                opacity: 0.8
+              }}
+            >
+              Coming Soon — Phase 2
+            </button>
           </div>
 
         </div>

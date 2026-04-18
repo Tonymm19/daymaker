@@ -5,8 +5,8 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/firebase/AuthContext';
 import { getAuth } from '@/lib/firebase/config';
 import { getDb } from '@/lib/firebase/config';
-import { doc, getDoc } from 'firebase/firestore';
-import type { Contact } from '@/lib/types';
+import { doc, getDoc, collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+import type { Contact, DeepDive } from '@/lib/types';
 import Link from 'next/link';
 
 export default function DeepDiveNewPage() {
@@ -25,6 +25,37 @@ export default function DeepDiveNewPage() {
       try {
         const db = getDb();
         if (!db) return;
+
+        // Reuse an existing Deep Dive for this contact rather than silently
+        // regenerating — scores drift run-to-run and users expect persistence.
+        // The detail page exposes an explicit "Regenerate Analysis" button.
+        const existingQ = query(
+          collection(db, 'users', user.uid, 'deepdives'),
+          where('targetContactId', '==', contactId),
+          orderBy('createdAt', 'desc'),
+          limit(1)
+        );
+        try {
+          const existingSnap = await getDocs(existingQ);
+          if (!existingSnap.empty) {
+            const existing = existingSnap.docs[0].data() as DeepDive;
+            router.replace(`/deepdive/${existing.deepdiveId}`);
+            return;
+          }
+        } catch (indexErr) {
+          // Composite index may not be created yet; fall back to no-filter scan.
+          console.warn('Falling back to client-side deepdive lookup:', indexErr);
+          const allSnap = await getDocs(collection(db, 'users', user.uid, 'deepdives'));
+          const matches = allSnap.docs
+            .map(d => d.data() as DeepDive)
+            .filter(d => d.targetContactId === contactId)
+            .sort((a, b) => ((b.createdAt as any)?.seconds || 0) - ((a.createdAt as any)?.seconds || 0));
+          if (matches.length > 0) {
+            router.replace(`/deepdive/${matches[0].deepdiveId}`);
+            return;
+          }
+        }
+
         const ref = doc(db, 'users', user.uid, 'contacts', contactId);
         const snap = await getDoc(ref);
         if (snap.exists()) {
@@ -37,7 +68,7 @@ export default function DeepDiveNewPage() {
       }
     }
     fetchContact();
-  }, [user, contactId]);
+  }, [user, contactId, router]);
 
   const handleGenerate = async () => {
     if (!targetContact || !user?.uid) return;

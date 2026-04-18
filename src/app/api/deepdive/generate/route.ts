@@ -76,11 +76,14 @@ You will simulate a precise 4-round dynamic dialogue between two AI agents:
 
 For the Target, you have extremely limited public information (just name, company, position). Use your general knowledge of the company and role to fill context. During Round 1, explicitly note when you are inferring contexts rather than working from verified data.
 
+DATA SCOPE — READ CAREFULLY:
+You only have access to the user's imported LinkedIn connections, not the target person's connections. The "Overlap Candidates" list below contains the USER's contacts who happen to work at companies related to the target — these are NOT verified mutual connections between the user and the target. Do not claim there are zero mutual connections. Instead, when mutual-connection data is relevant, say: "Mutual connection data requires both users to be on Daymaker Connect." When describing overlap, use the phrase "Network Overlap" (companies/industries that appear in both sides' contexts) and "Contacts at Similar Companies" (the user's connections who work at the target's company or related ones). Never use the bare phrase "Mutual Connections" to describe this data.
+
 The dialogue MUST alternate naturally ensuring at least one message from EACH agent per round. Do not produce monologues.
 
 Execute the following 4-Round sequence:
 - Round 1: Profile Briefing (Introductions, focus areas)
-- Round 2: Network Overlap Scan (Identify mutual industries/companies using provided overlap data)
+- Round 2: Network Overlap Scan (Identify overlapping industries/companies using provided overlap data; treat these as the user's contacts at similar companies, not verified mutuals)
 - Round 3: Synergy Identification (Identify 3-5 concrete synergy areas, valuing both sides)
 - Round 4: Action Recommendations (Specific steps for both parties)
 
@@ -148,7 +151,9 @@ Execute the 4-Round JSON Deep Dive. Remember to acknowledge the limited Target d
     const response = await callClaude({
       systemPrompt: systemPrompt,
       userMessage: userPrompt,
-      temperature: 0.3,
+      // temperature 0 keeps the synergy score stable across regenerations so
+      // repeat runs on the same contact don't swing the number by 15+ points.
+      temperature: 0,
       maxTokens: 3500
     });
 

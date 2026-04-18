@@ -1,21 +1,47 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/firebase/AuthContext';
-import { getDb } from '@/lib/firebase/config';
+import { getAuth, getDb } from '@/lib/firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
 import type { DeepDive } from '@/lib/types';
 import Link from 'next/link';
 
 export default function DeepDiveView() {
   const params = useParams();
+  const router = useRouter();
   const id = params.id as string;
   const { user } = useAuth();
-  
+
   const [deepDive, setDeepDive] = useState<DeepDive | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'summary' | 'transcript'>('summary');
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenError, setRegenError] = useState('');
+
+  const handleRegenerate = async () => {
+    if (!deepDive || !user?.uid) return;
+    if (!confirm('Regenerate this Deep Dive? The existing analysis will be preserved in history, and a new one will be created.')) {
+      return;
+    }
+    setIsRegenerating(true);
+    setRegenError('');
+    try {
+      const token = await getAuth()?.currentUser?.getIdToken();
+      const res = await fetch('/api/deepdive/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ userId: user.uid, targetContactId: deepDive.targetContactId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Regeneration failed');
+      router.push(`/deepdive/${data.deepdiveId}`);
+    } catch (err: any) {
+      setRegenError(err.message);
+      setIsRegenerating(false);
+    }
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -86,19 +112,23 @@ export default function DeepDiveView() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: '48px', textAlign: 'center' }}>
-          <div>
+          <div title="Contacts in your imported LinkedIn network who work at the same company as the target. Not actual LinkedIn mutual connections.">
             <div style={{ fontSize: '24px', fontFamily: "'JetBrains Mono', monospace", color: 'var(--text)', marginBottom: '4px' }}>{deepDive.mutualConnections}</div>
-            <div style={{ fontSize: '12px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Mutual<br/>Connections</div>
+            <div style={{ fontSize: '12px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Contacts at<br/>Similar Companies</div>
           </div>
-          <div>
+          <div title="Companies that appear in both the target's profile and your imported network.">
             <div style={{ fontSize: '24px', fontFamily: "'JetBrains Mono', monospace", color: 'var(--text)', marginBottom: '4px' }}>{deepDive.sharedCompanies?.length || 0}</div>
-            <div style={{ fontSize: '12px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Shared<br/>Companies</div>
+            <div style={{ fontSize: '12px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Network<br/>Overlap</div>
           </div>
           <div>
             <div style={{ fontSize: '24px', fontFamily: "'JetBrains Mono', monospace", color: 'var(--text)', marginBottom: '4px' }}>{deepDive.topSynergies?.length || 0}</div>
             <div style={{ fontSize: '12px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Key<br/>Synergies</div>
           </div>
         </div>
+      </div>
+
+      <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '-20px', marginBottom: '32px', fontStyle: 'italic' }}>
+        Based on imported LinkedIn data. For full mutual connection data, check LinkedIn directly.
       </div>
 
       {/* Tabs */}
@@ -250,11 +280,24 @@ export default function DeepDiveView() {
       )}
 
       {/* Bottom Actions */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '40px' }}>
+      {regenError && (
+        <div style={{ background: 'var(--red-dim)', color: 'var(--red)', padding: '12px', borderRadius: '8px', marginTop: '24px' }}>
+          {regenError}
+        </div>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '40px', flexWrap: 'wrap' }}>
+        <button
+          onClick={handleRegenerate}
+          disabled={isRegenerating}
+          className="btn"
+          style={{ background: 'var(--darker)', border: '1px solid var(--border)', color: 'var(--text)', padding: '12px 24px' }}
+        >
+          {isRegenerating ? 'Regenerating...' : 'Regenerate Analysis'}
+        </button>
         <button className="btn" style={{ background: 'var(--darker)', border: '1px solid var(--border)', color: 'var(--text)', padding: '12px 24px' }}>Share Results</button>
         <button className="btn primary" style={{ padding: '12px 24px' }}>Schedule Follow-Up</button>
       </div>
-      
+
     </main>
   );
 }

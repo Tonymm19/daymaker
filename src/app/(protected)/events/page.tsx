@@ -908,14 +908,39 @@ export default function EventsPage() {
                 style={{ height: '160px', resize: 'vertical', fontFamily: 'monospace', fontSize: '12px' }}
                 value={attendeeText} onChange={e => setAttendeeText(e.target.value)}
                 placeholder={"Paste attendee list (one per line)\nFormat: Name, Company, Title"} />
-              <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '6px' }}>
-                For best results, separate columns with commas. Missing columns are OK.
-              </div>
+              {(() => {
+                const hasAttendees = attendeeText.split('\n').some(l => l.trim().length > 0);
+                return hasAttendees ? (
+                  <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '6px' }}>
+                    For best results, separate columns with commas. Missing columns are OK.
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '11px', color: 'var(--orange)', marginTop: '6px', fontWeight: 500 }}>
+                    Add at least one attendee to generate a briefing.
+                  </div>
+                );
+              })()}
             </div>
 
-            <button type="submit" className="btn primary" disabled={isGenerating} style={{ marginTop: '4px', padding: '12px 24px' }}>
-              {isGenerating ? 'Generating Intelligence Brief...' : 'Generate Briefing'}
-            </button>
+            {(() => {
+              const hasAttendees = attendeeText.split('\n').some(l => l.trim().length > 0);
+              const disabled = isGenerating || !hasAttendees;
+              return (
+                <button
+                  type="submit"
+                  className="btn primary"
+                  disabled={disabled}
+                  style={{
+                    marginTop: '4px',
+                    padding: '12px 24px',
+                    opacity: disabled ? 0.5 : 1,
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {isGenerating ? 'Generating Intelligence Brief...' : 'Generate Briefing'}
+                </button>
+              );
+            })()}
           </form>
         </Modal>
       )}

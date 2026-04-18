@@ -15,19 +15,31 @@ import SearchTab from '@/components/dashboard/tabs/SearchTab';
 import AiAgentTab from '@/components/dashboard/tabs/AiAgentTab';
 import CategoriesTab from '@/components/dashboard/tabs/CategoriesTab';
 import CompaniesTab from '@/components/dashboard/tabs/CompaniesTab';
+import NextEventHero from '@/components/dashboard/NextEventHero';
 
-type Tab = 'search' | 'ai' | 'categories' | 'companies';
+type Tab = 'network' | 'ai' | 'categories' | 'companies';
+
+const TAB_LABELS: Record<Tab, string> = {
+  network: 'Network',
+  ai: 'AI Agent',
+  categories: 'Categories',
+  companies: 'Companies',
+};
 
 export default function DashboardPage() {
   const { contacts, isLoading, isError, mutate } = useContacts();
   const { userDoc } = useUser();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<Tab>('search');
+  const [activeTab, setActiveTab] = useState<Tab>('network');
   const [showUpload, setShowUpload] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   
-  const [isCategorizing, setIsCategorizing] = useState(false);
-  const [categorizeProgress, setCategorizeProgress] = useState<{ done: number; total: number } | null>(null);
+  // Combined state for categorize + embedding phases. The flows run as a
+  // two-phase pipeline ("Categorizing…" → "Building AI search index…") so a
+  // single phase indicator keeps the UI honest about what's actually running.
+  const [processingPhase, setProcessingPhase] = useState<'categorizing' | 'embedding' | null>(null);
+  const [phaseProgress, setPhaseProgress] = useState<{ done: number; total: number } | null>(null);
+  const isProcessing = processingPhase !== null;
 
   const handleCheckout = async () => {
     if (!user) return;
@@ -47,10 +59,72 @@ export default function DashboardPage() {
     }
   };
 
+  // Inner embedding loop — no lifecycle management so it can be chained from
+  // other handlers (e.g. handleCategorize) without clobbering their phase state.
+  const runEmbeddingLoop = async (token: string) => {
+    const LIMIT_PER_ROUND = 200;
+    const errors: string[] = [];
+    let totalDone = 0;
+    let totalTarget = 0;
+    setProcessingPhase('embedding');
+    setPhaseProgress(null);
+
+    for (let round = 0; round < 200; round++) {
+      const res = await fetch('/api/ai/embed', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ limit: LIMIT_PER_ROUND }),
+      });
+
+      if (!res.ok) {
+        const errPayload = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(errPayload.error || `Embedding failed (HTTP ${res.status})`);
+      }
+
+      const data = await res.json() as { embedded: number; remaining: number; errors?: string[] };
+      totalDone += data.embedded;
+      totalTarget = totalDone + data.remaining;
+      setPhaseProgress({ done: totalDone, total: totalTarget });
+      if (data.errors?.length) errors.push(...data.errors);
+
+      if (data.remaining <= 0) break;
+      if (data.embedded === 0) {
+        errors.push('Stopped early: a round completed without embedding any contacts.');
+        break;
+      }
+    }
+
+    if (errors.length) console.warn('[Embed] Errors during run:', errors);
+  };
+
+  // Build the vector search index for any contacts missing embeddings. Loops
+  // until the server reports zero remaining so it works for any network size.
+  const handleBuildIndex = async () => {
+    if (!user) return;
+    setProcessingPhase('embedding');
+    setPhaseProgress(null);
+
+    try {
+      const auth = getAuth();
+      const token = await auth?.currentUser?.getIdToken();
+      if (!token) throw new Error('Not authenticated');
+      await runEmbeddingLoop(token);
+      mutate();
+    } catch (err) {
+      console.error('Build index failed', err);
+    } finally {
+      setProcessingPhase(null);
+      setPhaseProgress(null);
+    }
+  };
+
   const handleCategorize = async () => {
     if (!user) return;
-    setIsCategorizing(true);
-    setCategorizeProgress(null);
+    setProcessingPhase('categorizing');
+    setPhaseProgress(null);
 
     // Chunk size per request — 4 batches of 50 contacts fits well under a
     // 60s serverless timeout. Drop to 100 if you're seeing timeouts.
@@ -85,7 +159,7 @@ export default function DashboardPage() {
         const data = await res.json() as { categorized: number; remaining: number; errors?: string[] };
         totalDone += data.categorized;
         totalTarget = totalDone + data.remaining;
-        setCategorizeProgress({ done: totalDone, total: totalTarget });
+        setPhaseProgress({ done: totalDone, total: totalTarget });
         if (data.errors?.length) errors.push(...data.errors);
 
         if (data.remaining <= 0) break;
@@ -97,12 +171,22 @@ export default function DashboardPage() {
       }
 
       if (errors.length) console.warn('[Categorize] Errors during run:', errors);
+
+      // Phase 2: immediately build the AI search index for any contacts that
+      // are now categorized but still missing vectors. Runs inline so users
+      // don't have to click a second button.
+      try {
+        await runEmbeddingLoop(token);
+      } catch (embedErr) {
+        console.error('Embedding phase failed', embedErr);
+      }
+
       mutate();
     } catch (err) {
       console.error('Categorize failed', err);
     } finally {
-      setIsCategorizing(false);
-      setCategorizeProgress(null);
+      setProcessingPhase(null);
+      setPhaseProgress(null);
     }
   };
 
@@ -117,8 +201,8 @@ export default function DashboardPage() {
     );
     if (!confirmed) return;
 
-    setIsCategorizing(true);
-    setCategorizeProgress(null);
+    setProcessingPhase('categorizing');
+    setPhaseProgress(null);
 
     try {
       const auth = getAuth();
@@ -135,30 +219,33 @@ export default function DashboardPage() {
       }
       // Skip mutate() here to avoid a full re-read of ~9k contacts mid-flow —
       // handleCategorize's single mutate() after the loop is enough. Progress
-      // comes from API response data via setCategorizeProgress, not Firestore.
+      // comes from API response data via setPhaseProgress, not Firestore.
     } catch (err) {
       console.error('Re-categorize reset failed', err);
-      setIsCategorizing(false);
-      setCategorizeProgress(null);
+      setProcessingPhase(null);
+      setPhaseProgress(null);
       return;
     }
 
-    // handleCategorize manages its own isCategorizing / progress lifecycle.
+    // handleCategorize manages its own phase lifecycle (including the
+    // embedding phase that chains automatically after categorization).
     await handleCategorize();
   };
 
   // Computed Stats
   const stats = useMemo(() => {
-    if (!contacts) return { total: 0, companies: 0, emails: 0, categorized: 0 };
-    
-    let total = contacts.length;
+    if (!contacts) return { total: 0, companies: 0, emails: 0, categorized: 0, embedded: 0 };
+
+    const total = contacts.length;
     let emails = 0;
     let categorized = 0;
+    let embedded = 0;
     const companiesSet = new Set<string>();
 
     contacts.forEach(c => {
       if (c.email && c.email.includes('@')) emails++;
       if (c.categories && c.categories.length > 0) categorized++;
+      if (Array.isArray(c.embedding) && c.embedding.length > 0) embedded++;
       if (c.company) companiesSet.add(c.company.trim());
     });
 
@@ -166,7 +253,8 @@ export default function DashboardPage() {
       total,
       companies: companiesSet.size,
       emails,
-      categorized
+      categorized,
+      embedded,
     };
   }, [contacts]);
 
@@ -275,61 +363,82 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Stats Bar */}
-          <div className="stat-bar" style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-            gap: '16px', 
-            marginBottom: '32px' 
+          {/* Your Next Event — event-driven entry point */}
+          <NextEventHero />
+
+          {/* Compact Quick Stats — reference data, not the lead */}
+          <div className="stat-bar" style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gap: '8px',
+            marginBottom: '24px',
           }}>
-            <div className="stat-card card orange-border" style={{ padding: '24px', border: '1px solid var(--orange)', position: 'relative', overflow: 'hidden' }}>
-              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg, var(--orange), transparent)' }} />
-              <div className="stat-lbl" style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '8px' }}>Total Contacts</div>
-              <div className="stat-val" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '28px', fontWeight: 700, color: 'var(--text)' }}>
-                {isLoading ? '...' : stats.total}
+            <div className="stat-card card" style={{ padding: '12px 16px' }}>
+              <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Contacts</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '18px', fontWeight: 700, color: 'var(--text)' }}>
+                {isLoading ? '...' : stats.total.toLocaleString()}
               </div>
             </div>
-            <div className="stat-card card" style={{ padding: '24px' }}>
-              <div className="stat-lbl" style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '8px' }}>Companies</div>
-              <div className="stat-val" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '28px', fontWeight: 700, color: 'var(--text)' }}>
-                {isLoading ? '...' : stats.companies}
+            <div className="stat-card card" style={{ padding: '12px 16px' }}>
+              <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Companies</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '18px', fontWeight: 700, color: 'var(--text)' }}>
+                {isLoading ? '...' : stats.companies.toLocaleString()}
               </div>
             </div>
-            <div className="stat-card card" style={{ padding: '24px' }}>
-              <div className="stat-lbl" style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '8px' }}>Emails</div>
-              <div className="stat-val" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '28px', fontWeight: 700, color: 'var(--text)' }}>
-                {isLoading ? '...' : stats.emails}
+            <div className="stat-card card" style={{ padding: '12px 16px' }}>
+              <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Emails</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '18px', fontWeight: 700, color: 'var(--text)' }}>
+                {isLoading ? '...' : stats.emails.toLocaleString()}
               </div>
             </div>
-            <div className="stat-card card" style={{ padding: '24px' }}>
-              <div className="stat-lbl" style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Categorized</span>
-                {isCategorizing ? (
-                  <span style={{ color: 'var(--orange)', fontSize: '11px', fontWeight: 600 }}>
-                    {categorizeProgress
-                      ? `Categorized ${categorizeProgress.done.toLocaleString()} / ${categorizeProgress.total.toLocaleString()}...`
-                      : 'Running...'}
-                  </span>
-                ) : (
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    {stats.categorized < stats.total && stats.total > 0 && (
-                      <button onClick={handleCategorize} style={{ background: 'none', border: 'none', color: 'var(--orange)', fontSize: '11px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>
-                        Categorize Now
-                      </button>
-                    )}
-                    {stats.total > 0 && (
-                      <button onClick={handleRecategorizeAll} style={{ background: 'none', border: 'none', color: 'var(--orange)', fontSize: '11px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>
-                        Re-categorize All
-                      </button>
-                    )}
-                  </div>
-                )}
+            <div className="stat-card card" style={{ padding: '12px 16px' }}>
+              <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Categorized</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '18px', fontWeight: 700, color: 'var(--text)' }}>
+                {isLoading ? '...' : stats.categorized.toLocaleString()}
               </div>
-              <div className="stat-val" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '28px', fontWeight: 700, color: 'var(--text)' }}>
-                {isLoading ? '...' : stats.categorized}
-              </div>
+              {!isLoading && stats.total > 0 && (
+                <div style={{ marginTop: '2px', fontSize: '10px', color: 'var(--muted)' }}>
+                  Index: {stats.embedded.toLocaleString()} / {stats.total.toLocaleString()}
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Data maintenance controls — moved out of the stats card to keep the bar compact */}
+          {!isLoading && stats.total > 0 && (
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '24px', fontSize: '12px' }}>
+              {isProcessing ? (
+                <span style={{ color: 'var(--orange)', fontWeight: 600 }}>
+                  {processingPhase === 'categorizing' ? 'Categorizing contacts' : 'Building AI search index'}
+                  {phaseProgress
+                    ? ` ${phaseProgress.done.toLocaleString()} / ${phaseProgress.total.toLocaleString()}...`
+                    : '...'}
+                </span>
+              ) : (
+                <>
+                  {stats.categorized < stats.total && (
+                    <button onClick={handleCategorize} style={{ background: 'none', border: 'none', color: 'var(--orange)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>
+                      Categorize Now
+                    </button>
+                  )}
+                  {stats.embedded < stats.total && (
+                    <button
+                      onClick={handleBuildIndex}
+                      title={stats.embedded === 0
+                        ? 'Generate vector embeddings so AI Agent search works across your full network.'
+                        : `Finish generating embeddings for the remaining ${(stats.total - stats.embedded).toLocaleString()} contacts.`}
+                      style={{ background: 'none', border: 'none', color: 'var(--orange)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                    >
+                      Generate Search Index
+                    </button>
+                  )}
+                  <button onClick={handleRecategorizeAll} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: '12px', fontWeight: 500, cursor: 'pointer', padding: 0 }}>
+                    Re-categorize All
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Sub Navigation */}
           <div className="dash-nav" style={{ 
@@ -338,7 +447,7 @@ export default function DashboardPage() {
             marginBottom: '24px', 
             borderBottom: '1px solid var(--border)' 
           }}>
-            {(['search', 'ai', 'categories', 'companies'] as Tab[]).map((tab) => (
+            {(['network', 'ai', 'categories', 'companies'] as Tab[]).map((tab) => (
               <button
                 key={tab}
                 className={`dash-tab ${activeTab === tab ? 'active' : ''}`}
@@ -353,10 +462,9 @@ export default function DashboardPage() {
                   cursor: 'pointer',
                   borderBottom: activeTab === tab ? '2px solid var(--orange)' : '2px solid transparent',
                   transition: 'all 0.2s',
-                  textTransform: 'capitalize'
                 }}
               >
-                {tab === 'ai' ? 'AI Agent' : tab}
+                {TAB_LABELS[tab]}
               </button>
             ))}
           </div>
@@ -375,7 +483,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="tab-pane active" style={{ padding: '24px' }}>
-                {activeTab === 'search' && <SearchTab contacts={contacts} onSelectContact={(c) => setSelectedContact(c)} />}
+                {activeTab === 'network' && <SearchTab contacts={contacts} onSelectContact={(c) => setSelectedContact(c)} />}
                 {activeTab === 'ai' && (
                   <AiAgentTab
                     onSelectContact={(contactId) => {

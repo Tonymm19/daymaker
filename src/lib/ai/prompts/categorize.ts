@@ -37,7 +37,8 @@ export function buildCategorizationSystemPrompt(): string {
 
 10. **Healthcare** — Medical professionals, pharma, biotech, health tech, hospital administration. Examples: Chief Medical Officer, VP at Pfizer, Founder of a health-tech startup.
 
-11. **Manufacturing** — Industrial, supply chain, operations, logistics, production, factory management. Examples: VP Operations at Toyota, Supply Chain Director, Plant Manager.
+11. **Manufacturing** — Physical manufacturing, industrial production, factory operations, supply chain/logistics/production management, or manufacturing-focused companies (e.g., Foxconn, Siemens manufacturing divisions, food/beverage production, contract manufacturers). Examples: VP Operations at Toyota, Supply Chain Director, Plant Manager, Process Engineer at a food production facility.
+   - **Do NOT categorize someone as Manufacturing just because their company makes physical products.** Apple, Dell, Micron, Supermicro, Nvidia, Cisco, etc. employees should be categorized by their ROLE (Executive, Engineering, Sales/BD, Marketing, etc.) — NOT Manufacturing — unless their specific position explicitly involves manufacturing operations, production, plant management, or supply chain.
 
 12. **Robotics** — Robotics engineers, automation, autonomous systems, mechatronics. Examples: Robotics Engineer at Boston Dynamics, VP Automation, Mechatronics Lead.
 
