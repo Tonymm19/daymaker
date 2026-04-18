@@ -100,7 +100,7 @@ export default function CsvUpload({ onComplete }: CsvUploadProps) {
         uploadFile = new File([csvBlob], 'Connections.csv', { type: 'text/csv' });
       }
 
-      setProgress('Parsing & importing contacts...');
+      setProgress('Importing contacts...');
 
       // Upload to API
       const formData = new FormData();
@@ -120,50 +120,96 @@ export default function CsvUpload({ onComplete }: CsvUploadProps) {
         throw new Error(data.error || 'Import failed');
       }
 
-      setProgress('Categorizing contacts... (this may take a minute)');
+      // Phase 2: Categorize — loop until the server reports zero remaining so
+      // the whole network gets categorized in a single import flow, not just
+      // the first batch.
+      let totalCategorized = 0;
       try {
-        const catResponse = await fetch('/api/ai/categorize-batch', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${idToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({}),
-        });
-        
-        const catData = await catResponse.json();
-        if (catResponse.ok) {
-          data.categorized = catData.categorized;
-          if (catData.errors && catData.errors.length > 0) {
-            data.errors = [...(data.errors || []), ...catData.errors];
+        let catTarget = 0;
+        for (let round = 0; round < 200; round++) {
+          const catResponse = await fetch('/api/ai/categorize-batch', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${idToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ limit: 200 }),
+          });
+
+          const catData = await catResponse.json();
+          if (!catResponse.ok) {
+            data.errors = [...(data.errors || []), `Categorization API error: ${catData.error}`];
+            break;
           }
 
-          // Phase 3: Embeddings Generation
-          setProgress('Generating embeddings... (this makes AI search lightning fast)');
-          try {
-            const embedResponse = await fetch('/api/ai/embed', {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${idToken}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({}),
-            });
-            const embedData = await embedResponse.json();
-            if (!embedResponse.ok) {
-              data.errors = [...(data.errors || []), `Embedding API error: ${embedData.error}`];
-            }
-          } catch (embedErr) {
-            console.error('Embedding failed', embedErr);
-            data.errors = [...(data.errors || []), 'Embedding sequence failed.'];
-          }
+          const done = typeof catData.categorized === 'number' ? catData.categorized : 0;
+          const remaining = typeof catData.remaining === 'number' ? catData.remaining : 0;
+          totalCategorized += done;
+          catTarget = totalCategorized + remaining;
 
-        } else {
-          data.errors = [...(data.errors || []), `Categorization API error: ${catData.error}`];
+          if (catData.errors?.length) data.errors = [...(data.errors || []), ...catData.errors];
+
+          setProgress(
+            catTarget > 0
+              ? `Categorizing contacts... ${totalCategorized.toLocaleString()} / ${catTarget.toLocaleString()}`
+              : 'Categorizing contacts...'
+          );
+
+          if (remaining <= 0) break;
+          // Stop if a round made no progress so we don't spin forever.
+          if (done === 0) {
+            data.errors = [...(data.errors || []), 'Categorization stopped early: a round completed without progress.'];
+            break;
+          }
         }
       } catch (e) {
         console.error('Categorization failed', e);
         data.errors = [...(data.errors || []), 'Categorization failed or timed out.'];
+      }
+      data.categorized = totalCategorized;
+
+      // Phase 3: Embeddings — same loop pattern. Previously only ran one
+      // round, which left 90%+ of large networks without a search index.
+      try {
+        let totalEmbedded = 0;
+        let embedTarget = 0;
+        for (let round = 0; round < 200; round++) {
+          const embedResponse = await fetch('/api/ai/embed', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${idToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ limit: 200 }),
+          });
+          const embedData = await embedResponse.json();
+          if (!embedResponse.ok) {
+            data.errors = [...(data.errors || []), `Embedding API error: ${embedData.error}`];
+            break;
+          }
+
+          const done = typeof embedData.embedded === 'number' ? embedData.embedded : 0;
+          const remaining = typeof embedData.remaining === 'number' ? embedData.remaining : 0;
+          totalEmbedded += done;
+          embedTarget = totalEmbedded + remaining;
+
+          if (embedData.errors?.length) data.errors = [...(data.errors || []), ...embedData.errors];
+
+          setProgress(
+            embedTarget > 0
+              ? `Building AI search index... ${totalEmbedded.toLocaleString()} / ${embedTarget.toLocaleString()}`
+              : 'Building AI search index...'
+          );
+
+          if (remaining <= 0) break;
+          if (done === 0) {
+            data.errors = [...(data.errors || []), 'Embedding stopped early: a round completed without progress.'];
+            break;
+          }
+        }
+      } catch (embedErr) {
+        console.error('Embedding failed', embedErr);
+        data.errors = [...(data.errors || []), 'Embedding sequence failed.'];
       }
 
       setResult(data);
