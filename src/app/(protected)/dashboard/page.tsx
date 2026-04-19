@@ -190,48 +190,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Re-categorize all contacts from scratch. Intended for use after a prompt
-  // change: resets `categories` to [] on every contact, then delegates to the
-  // chunked categorization loop in handleCategorize.
-  const handleRecategorizeAll = async () => {
-    if (!user || stats.total === 0) return;
-
-    const confirmed = window.confirm(
-      `This will re-categorize all ${stats.total.toLocaleString()} contacts using improved AI. This costs approximately $3-5 in API credits. Continue?`
-    );
-    if (!confirmed) return;
-
-    setProcessingPhase('categorizing');
-    setPhaseProgress(null);
-
-    try {
-      const auth = getAuth();
-      const token = await auth?.currentUser?.getIdToken();
-      if (!token) throw new Error('Not authenticated');
-
-      const resetRes = await fetch('/api/ai/categorize-reset', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!resetRes.ok) {
-        const errPayload = await resetRes.json().catch(() => ({ error: resetRes.statusText }));
-        throw new Error(errPayload.error || `Reset failed (HTTP ${resetRes.status})`);
-      }
-      // Skip mutate() here to avoid a full re-read of ~9k contacts mid-flow —
-      // handleCategorize's single mutate() after the loop is enough. Progress
-      // comes from API response data via setPhaseProgress, not Firestore.
-    } catch (err) {
-      console.error('Re-categorize reset failed', err);
-      setProcessingPhase(null);
-      setPhaseProgress(null);
-      return;
-    }
-
-    // handleCategorize manages its own phase lifecycle (including the
-    // embedding phase that chains automatically after categorization).
-    await handleCategorize();
-  };
-
   // Computed Stats
   const stats = useMemo(() => {
     if (!contacts) return { total: 0, companies: 0, emails: 0, categorized: 0, embedded: 0 };
@@ -405,7 +363,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Data maintenance controls — moved out of the stats card to keep the bar compact */}
-          {!isLoading && stats.total > 0 && (
+          {!isLoading && stats.total > 0 && (isProcessing || stats.categorized < stats.total || stats.embedded < stats.total) && (
             <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '24px', fontSize: '12px' }}>
               {isProcessing ? (
                 <span style={{ color: 'var(--orange)', fontWeight: 600 }}>
@@ -432,9 +390,6 @@ export default function DashboardPage() {
                       Generate Search Index
                     </button>
                   )}
-                  <button onClick={handleRecategorizeAll} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: '12px', fontWeight: 500, cursor: 'pointer', padding: 0 }}>
-                    Re-categorize All
-                  </button>
                 </>
               )}
             </div>

@@ -95,11 +95,16 @@ export async function POST(request: Request) {
     let ragUsed = false;
 
     if (contactCount > RAG_THRESHOLD) {
-      // RAG Pipeline
+      // RAG Pipeline — embed then scan-and-score in batches.
       ragUsed = true;
+      const embedStart = Date.now();
       const queryEmbedding = await embedQuery(query);
+      const retrieveStart = Date.now();
       contextData = await retrieveRelevant(adminDb, uid, queryEmbedding, DEFAULT_TOP_K);
-      
+      console.log(
+        `[query] uid=${uid} contacts=${contactCount} embed=${retrieveStart - embedStart}ms ` +
+        `retrieve=${Date.now() - retrieveStart}ms matched=${contextData.length}`
+      );
     } else {
       // Full Context fetch
       const snapshot = await adminDb.collection(`users/${uid}/contacts`).get();

@@ -85,7 +85,7 @@ steps:
       - --platform=managed
       - --allow-unauthenticated
       - --port=3000
-      - --memory=1Gi
+      - --memory=2Gi
       - --cpu=1
       - --timeout=300
       - --min-instances=0

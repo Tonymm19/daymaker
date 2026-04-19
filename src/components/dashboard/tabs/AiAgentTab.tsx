@@ -362,13 +362,24 @@ export default function AiAgentTab({ onSelectContact }: AiAgentTabProps = {}) {
         body: JSON.stringify({ query: text })
       });
 
-      const data = await res.json();
-      
+      // Cloud Run returns a plain-text/HTML page (not JSON) on 503/504 when
+      // the container OOMs or exceeds the request timeout. Guard the parse
+      // so we surface a friendly message instead of "Unexpected token <".
+      let data: { content?: string; response?: string; tokensUsed?: number; durationMs?: number; ragUsed?: boolean; contactsReferenced?: number; matchedContacts?: MatchedContact[]; error?: string } = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
+
       if (!res.ok) {
         if (res.status === 501) {
           throw new Error('AI Agent functionality is not yet implemented (Pending Task 6).');
         }
-        throw new Error(data.error || 'Failed to query AI agent');
+        if (res.status === 503 || res.status === 504) {
+          throw new Error('Your network is large and the query timed out. Please try again.');
+        }
+        throw new Error(data.error || `Failed to query AI agent (HTTP ${res.status})`);
       }
 
       setResponse(data.content || data.response || 'No response generated.');

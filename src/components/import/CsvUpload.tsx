@@ -45,6 +45,9 @@ export default function CsvUpload({ onComplete }: CsvUploadProps) {
   const [progress, setProgress] = useState('');
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState('');
+  const [recatState, setRecatState] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [recatProgress, setRecatProgress] = useState('');
+  const [recatError, setRecatError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(async (file: File) => {
@@ -257,10 +260,79 @@ export default function CsvUpload({ onComplete }: CsvUploadProps) {
     setResult(null);
     setError('');
     setProgress('');
+    setRecatState('idle');
+    setRecatProgress('');
+    setRecatError('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
+
+  // Re-categorize every contact from scratch. Only exposed after an import
+  // completes — this is a prompt-change recovery tool, not a casual action,
+  // because it re-runs ~$3-5 of Claude calls on the full network.
+  const handleRecategorizeAll = useCallback(async () => {
+    if (!user || !result) return;
+
+    const total = result.total;
+    const confirmed = window.confirm(
+      `This will re-categorize all ${total.toLocaleString()} contacts using improved AI. This costs approximately $3-5 in API credits. Continue?`
+    );
+    if (!confirmed) return;
+
+    setRecatState('running');
+    setRecatProgress('Resetting categories...');
+    setRecatError('');
+
+    try {
+      const auth = getAuth();
+      const token = await auth?.currentUser?.getIdToken();
+      if (!token) throw new Error('Not authenticated');
+
+      const resetRes = await fetch('/api/ai/categorize-reset', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resetRes.ok) {
+        const errPayload = await resetRes.json().catch(() => ({ error: resetRes.statusText }));
+        throw new Error(errPayload.error || `Reset failed (HTTP ${resetRes.status})`);
+      }
+
+      let totalCategorized = 0;
+      let catTarget = 0;
+      for (let round = 0; round < 200; round++) {
+        const catResponse = await fetch('/api/ai/categorize-batch', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ limit: 200 }),
+        });
+        const catData = await catResponse.json();
+        if (!catResponse.ok) throw new Error(catData.error || 'Categorization failed');
+
+        const done = typeof catData.categorized === 'number' ? catData.categorized : 0;
+        const remaining = typeof catData.remaining === 'number' ? catData.remaining : 0;
+        totalCategorized += done;
+        catTarget = totalCategorized + remaining;
+
+        setRecatProgress(
+          catTarget > 0
+            ? `Re-categorizing... ${totalCategorized.toLocaleString()} / ${catTarget.toLocaleString()}`
+            : 'Re-categorizing...'
+        );
+
+        if (remaining <= 0) break;
+        if (done === 0) break;
+      }
+
+      setRecatState('done');
+      setRecatProgress('');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Re-categorization failed';
+      setRecatError(message);
+      setRecatState('error');
+      setRecatProgress('');
+    }
+  }, [user, result]);
 
   return (
     <div>
@@ -417,6 +489,47 @@ export default function CsvUpload({ onComplete }: CsvUploadProps) {
           <button className="btn" onClick={handleReset} style={{ width: '100%' }}>
             Import Another CSV
           </button>
+
+          {/* Re-categorize All — prompt-change recovery. Only offered here, not on
+              the dashboard, so users don't casually re-run a paid operation. */}
+          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+            {recatState === 'running' ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', color: 'var(--orange)', fontWeight: 600 }}>
+                <div className="loading-spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
+                <span>{recatProgress || 'Re-categorizing...'}</span>
+              </div>
+            ) : recatState === 'done' ? (
+              <div style={{ fontSize: '12px', color: 'var(--green)', fontWeight: 600 }}>
+                Re-categorization complete.
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '6px', lineHeight: 1.4 }}>
+                  Changed the categorization prompt? Re-run categorization across your full network (~$3-5 in API credits).
+                </div>
+                <button
+                  onClick={handleRecategorizeAll}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--muted)',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    padding: 0,
+                    textDecoration: 'underline',
+                  }}
+                >
+                  Re-categorize all contacts
+                </button>
+                {recatState === 'error' && recatError && (
+                  <div style={{ marginTop: '6px', fontSize: '11px', color: 'var(--red)' }}>
+                    {recatError}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
 
