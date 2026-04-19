@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { DM_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
+import { ThemeProvider, THEME_INIT_SCRIPT } from '@/lib/theme/ThemeContext';
 
 const dmSans = DM_Sans({
   variable: '--font-dm-sans',
@@ -44,6 +45,9 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        {/* Resolve theme before first paint so dark/light palette is correct
+            from frame 1. Safe to inline — no untrusted interpolation. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         {/* Instrument Serif — loaded via Google Fonts link */}
         <link
           rel="preconnect"
@@ -60,7 +64,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen antialiased" suppressHydrationWarning>
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

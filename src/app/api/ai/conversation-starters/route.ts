@@ -38,6 +38,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing contact info' }, { status: 400 });
     }
 
+    // Pull the user's RM persona (if connected) so starters can reference
+    // topics the user is genuinely interested in rather than generic hooks.
+    let rmBlock = '';
+    try {
+      const userSnap = await adminDb.collection('users').doc(uid).get();
+      if (userSnap.exists) {
+        const { buildRmContextBlockFromUser } = await import('@/lib/ai/rm-context');
+        rmBlock = buildRmContextBlockFromUser(userSnap.data() as any);
+      }
+    } catch (err) {
+      console.warn('[ConversationStarters] Could not load RM context:', err);
+    }
+
     const userPrompt = `Generate 3-4 short, highly personalized conversation starters for outreach to the target contact.
 Keep them extremely concise (1-2 sentences max each).
 Do NOT include greetings, just the opening hook.
@@ -47,7 +60,8 @@ Company: ${company || 'Unknown'}
 Position: ${position || 'Unknown'}
 
 The user's overarching networking goal (North Star) is: ${northStar || 'Build meaningful professional connections.'}
-Ensure the conversation starters align with the user's goal while being relevant to the target's role.
+${rmBlock}
+Ensure the conversation starters align with the user's goal and lean on the user's tracking interests and active themes above (when provided) so the hooks sound like the user, not a template. Still match the target's role.
 Format the output EXACTLY as a JSON array of strings. Do not wrap in markdown or add anything else to the response.
 Example: ["Hook 1", "Hook 2", "Hook 3"]`;
 

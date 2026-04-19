@@ -31,6 +31,16 @@ export interface DaymakerUser {
   northStar: string;
   rmConnected: boolean;
   rmPersonaTraits: string[];
+  /** Reflections Match Bearer token. Server-side only — never returned in
+   *  client-facing responses. Encrypted at rest when RM_KEY_ENCRYPTION_SECRET
+   *  is set; stored plaintext otherwise. */
+  rmApiKey?: string | null;
+  rmNorthStar?: string | null;
+  rmExpertise?: RmExpertiseArea[];
+  rmActiveThemes?: RmActiveTheme[];
+  rmStrategicContext?: string | null;
+  rmTrackingInterests?: string[];
+  rmLastSyncedAt?: FirestoreTimestamp | null;
   currentMonthQueries: number;
   currentMonthEvents: number;
   currentMonthString: string;
@@ -42,6 +52,19 @@ export interface DaymakerUser {
   microsoftCalendarRefreshToken: string | null;
   createdAt: FirestoreTimestamp;
   updatedAt: FirestoreTimestamp;
+}
+
+export interface RmExpertiseArea {
+  area: string;
+  depth: string;
+  yearsOfExperience: number | null;
+  context: string;
+}
+
+export interface RmActiveTheme {
+  theme: string;
+  strength: string;
+  description: string;
 }
 
 export interface CreateUserInput {

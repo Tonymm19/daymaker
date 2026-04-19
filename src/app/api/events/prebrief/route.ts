@@ -80,6 +80,12 @@ export async function POST(req: Request) {
     // Target User North Star string
     const targetNorthStar = userDoc.northStar?.trim() || "Identify the most strategically valuable connections for a professional networking context.";
 
+    // Reflections Match persona block (empty string if not connected) — adds
+    // active themes, emerging interests, and expertise so attendee relevance
+    // scoring reflects what the user genuinely cares about today.
+    const { buildRmContextBlockFromUser } = await import('@/lib/ai/rm-context');
+    const rmBlock = buildRmContextBlockFromUser(userDoc);
+
     // 2. Fetch User's Contacts to Determine Network Anchors
     const contactsSnap = await userRef.collection('contacts').get();
     const networkNames = new Set<string>();
@@ -128,7 +134,7 @@ export async function POST(req: Request) {
       const promptContext = `
         You are an elite networking strategist. The user is attending an event called "${eventName}" in "${eventLocation || 'an unspecified location'}".
         The user's core strategic goal (North Star) is: "${targetNorthStar}"
-${descriptionBlock}${urlsBlock}
+${rmBlock}${descriptionBlock}${urlsBlock}
 
         Use the event description and any URLs above as context about the event's theme, audience, and likely conversations so your relevance scoring and conversation starters are grounded in that context.
 

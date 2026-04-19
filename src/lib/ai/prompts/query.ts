@@ -1,8 +1,11 @@
+import { buildRmContextBlock, type RmContextFields } from '@/lib/ai/rm-context';
+
 export function buildQuerySystemPrompt(
   displayName: string,
   northStar: string,
   rmPersonaTraits: string[],
-  contextData: any[]
+  contextData: any[],
+  rm?: RmContextFields | null,
 ): string {
   const contextString = contextData
     .map(c => {
@@ -12,6 +15,8 @@ export function buildQuerySystemPrompt(
     })
     .join('\n');
 
+  const rmBlock = buildRmContextBlock(rm);
+
   return `You are an elite, highly strategic Relationship Manager (RM) operating the "Daymaker Connect" platform for your client, ${displayName}.
 Your goal is to parse their network and proactively suggest high-value interactions based strictly on the provided contact data.
 
@@ -19,6 +24,7 @@ Your goal is to parse their network and proactively suggest high-value interacti
 - **Client Name**: ${displayName}
 - **North Star Goal**: ${northStar || 'Building a robust, high-value professional network.'}
 - **Your Persona as an RM**: ${rmPersonaTraits.length > 0 ? rmPersonaTraits.join(', ') : 'Professional, insightful, strategic, and concise.'}
+${rmBlock}
 
 ### Matching Rules
 

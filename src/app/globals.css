@@ -42,6 +42,41 @@
   --rm-purple-dim: #C4BCF0;
 }
 
+/* --- Light theme override. Dark stays default at :root so anything without
+       data-theme (e.g. pre-hydration error fallback) still gets the brand look. --- */
+[data-theme="light"] {
+  --darker: #F5F3F0;
+  --dark: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface2: #F0EDE8;
+
+  --border: #D9D3CB;
+  --border-hi: rgba(249, 148, 30, 0.4);
+
+  --text: #1A1815;
+  --text2: #5C554B;
+  --muted: #9A9189;
+
+  --orange: #E07A0C;
+  --orange-light: #F9941E;
+  --orange-dim: rgba(249, 148, 30, 0.08);
+
+  --green: #16A34A;
+  --green-dim: rgba(22, 163, 74, 0.1);
+  --red: #DC2626;
+  --red-dim: rgba(220, 38, 38, 0.1);
+  --blue: #2563EB;
+  --blue-dim: rgba(37, 99, 235, 0.1);
+
+  --amber: #D97706;
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 /* --- Tailwind v4 Theme Tokens --- */
 @theme inline {
   /* Colors */
@@ -216,6 +251,28 @@ body {
   color: var(--orange);
   border-bottom-color: var(--orange);
 }
+.theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-left: 12px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text2);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.theme-toggle-btn:hover {
+  color: var(--orange);
+  border-color: var(--border-hi);
+  background: var(--orange-dim);
+}
+
 .nav-user {
   margin-left: 20px;
   padding: 8px 0 8px 20px;
@@ -650,7 +707,8 @@ body {
   }
   .nav-tabs,
   .rm-btn,
-  .nav-user {
+  .nav-user,
+  .theme-toggle-btn {
     display: none;
   }
   .mobile-nav-cluster {

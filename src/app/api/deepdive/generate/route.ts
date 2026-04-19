@@ -3,6 +3,7 @@ import { embedQuery, retrieveRelevant } from '@/lib/ai/rag';
 import type { Contact, DeepDive, DaymakerUser } from '@/lib/types';
 import { randomUUID } from 'crypto';
 import { callClaude, extractJson } from '@/lib/ai/claude';
+import { buildRmContextBlockFromUser } from '@/lib/ai/rm-context';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,6 +65,10 @@ export async function POST(req: Request) {
     let userContext = `Name: ${userDoc.displayName}\nNorth Star: ${userDoc.northStar || 'General networking and growth'}\n`;
     if (userDoc.rmPersonaTraits && userDoc.rmPersonaTraits.length > 0) {
       userContext += `Network Identity: ${userDoc.rmPersonaTraits.join(', ')}\n`;
+    }
+    const rmBlock = buildRmContextBlockFromUser(userDoc);
+    if (rmBlock) {
+      userContext += `${rmBlock}\n`;
     }
 
     const networkOverlapContext = searchResultContacts.map((c: any) => `${c.fullName} (${c.position} at ${c.company})`).join('\n');

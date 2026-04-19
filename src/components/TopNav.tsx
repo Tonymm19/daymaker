@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/firebase/AuthContext';
 import { signOut } from '@/lib/firebase/auth';
+import { useTheme } from '@/lib/theme/ThemeContext';
 
 const NAV_TABS = [
   { label: 'Dashboard', href: '/dashboard' },
@@ -35,12 +36,31 @@ function isTabActive(pathname: string, href: string): boolean {
   return href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(href);
 }
 
+function ThemeToggleIcon({ theme }: { theme: 'dark' | 'light' }) {
+  // In dark mode show a sun (click to go light); in light mode show a moon.
+  if (theme === 'dark') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  );
+}
+
 export default function TopNav() {
   const pathname = usePathname();
   const { user } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const themeLabel = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -120,6 +140,17 @@ export default function TopNav() {
           </span>
           <span className="rm-status" />
         </a>
+
+        {/* Theme toggle (desktop only) */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={themeLabel}
+          title={themeLabel}
+          className="theme-toggle-btn"
+        >
+          <ThemeToggleIcon theme={theme} />
+        </button>
 
         {/* User Area (desktop only) */}
         <div className="nav-user" ref={dropdownRef} style={{ position: 'relative' }}>
@@ -268,6 +299,15 @@ export default function TopNav() {
               >
                 Settings
               </Link>
+              <button
+                type="button"
+                className="mobile-menu-link"
+                onClick={() => { toggleTheme(); }}
+                style={{ display: 'flex', alignItems: 'center', gap: '10px' }}
+              >
+                <ThemeToggleIcon theme={theme} />
+                {theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              </button>
               <a
                 href="https://reflectionsmatch.com/profile"
                 target="_blank"

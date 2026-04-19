@@ -40,6 +40,7 @@ export async function POST(request: Request) {
     let rmPersonaTraits: string[] = [];
     let displayName = 'User';
     let contactCount = 0;
+    let rmContext: any = null;
 
     // 1. Transactional Billing Check & Increment
     try {
@@ -55,6 +56,15 @@ export async function POST(request: Request) {
         rmPersonaTraits = data.rmPersonaTraits || [];
         displayName = data.displayName || 'User';
         contactCount = data.contactCount || 0;
+        rmContext = {
+          rmConnected: !!data.rmConnected,
+          rmPersonaTraits: data.rmPersonaTraits || [],
+          rmNorthStar: data.rmNorthStar || null,
+          rmExpertise: data.rmExpertise || [],
+          rmActiveThemes: data.rmActiveThemes || [],
+          rmStrategicContext: data.rmStrategicContext || null,
+          rmTrackingInterests: data.rmTrackingInterests || [],
+        };
 
         let monthQueries = data.currentMonthQueries || 0;
         const storedMonth = data.currentMonthString || '';
@@ -101,7 +111,8 @@ export async function POST(request: Request) {
       displayName,
       northStar,
       rmPersonaTraits,
-      contextData
+      contextData,
+      rmContext,
     );
 
     // 4. Call Claude
