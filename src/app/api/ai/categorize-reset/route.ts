@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { FIRESTORE_BATCH_LIMIT } from '@/lib/constants';
+import { setContactStatField } from '@/lib/firebase/stats';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +49,12 @@ export async function POST(req: NextRequest) {
       }
       await batch.commit();
       reset += chunk.length;
+    }
+
+    try {
+      await setContactStatField(adminDb, uid, 'categorized', 0);
+    } catch (statsErr) {
+      console.warn('[Categorize Reset] setContactStatField failed (non-fatal):', statsErr);
     }
 
     return NextResponse.json({ reset });

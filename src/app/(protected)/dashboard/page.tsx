@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useContacts } from '@/lib/hooks/useContacts';
 import { useUser } from '@/lib/hooks/useUser';
 import { useAuth } from '@/lib/firebase/AuthContext';
@@ -27,8 +27,16 @@ const TAB_LABELS: Record<Tab, string> = {
 };
 
 export default function DashboardPage() {
-  const { contacts, isLoading, isError, mutate } = useContacts();
-  const { userDoc } = useUser();
+  // Start the dashboard by loading only 50 most-recent contacts so first paint
+  // is fast on ~9k-contact networks. `fullLoadRequested` flips to true the
+  // moment a feature actually needs the full set (search, Categories/Companies
+  // aggregations, AI-result contact lookups, or a manual Load More).
+  const [fullLoadRequested, setFullLoadRequested] = useState(false);
+  const contactMode = fullLoadRequested ? 'full' : 'recent';
+  const { contacts, isLoading, isError, mutate } = useContacts({ mode: contactMode, recentLimit: 50 });
+  const requestFullLoad = () => setFullLoadRequested(true);
+
+  const { userDoc, mutate: mutateUser } = useUser();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('network');
   const [showUpload, setShowUpload] = useState(false);
@@ -113,6 +121,7 @@ export default function DashboardPage() {
       if (!token) throw new Error('Not authenticated');
       await runEmbeddingLoop(token);
       mutate();
+      mutateUser();
     } catch (err) {
       console.error('Build index failed', err);
     } finally {
@@ -182,6 +191,7 @@ export default function DashboardPage() {
       }
 
       mutate();
+      mutateUser();
     } catch (err) {
       console.error('Categorize failed', err);
     } finally {
@@ -190,8 +200,20 @@ export default function DashboardPage() {
     }
   };
 
-  // Computed Stats
+  // Stats: prefer the cached contactStats on the user doc (fast — one doc read)
+  // and fall back to client-computed counts while the backfill runs or for
+  // users whose stats haven't been cached yet.
   const stats = useMemo(() => {
+    if (userDoc?.contactStats) {
+      const s = userDoc.contactStats;
+      return {
+        total: s.total ?? 0,
+        companies: s.companies ?? 0,
+        emails: s.emails ?? 0,
+        categorized: s.categorized ?? 0,
+        embedded: s.embedded ?? 0,
+      };
+    }
     if (!contacts) return { total: 0, companies: 0, emails: 0, categorized: 0, embedded: 0 };
 
     const total = contacts.length;
@@ -214,7 +236,34 @@ export default function DashboardPage() {
       categorized,
       embedded,
     };
-  }, [contacts]);
+  }, [userDoc?.contactStats, contacts]);
+
+  // Backfill cached stats once for users who have contacts but no
+  // contactStats object yet. Guards against repeated calls with a ref so
+  // re-renders don't retrigger the recompute.
+  const statsBackfillFired = useRef(false);
+  useEffect(() => {
+    if (statsBackfillFired.current) return;
+    if (!user || !userDoc) return;
+    if (userDoc.contactStats) return;
+    if ((userDoc.contactCount ?? 0) <= 0) return;
+    statsBackfillFired.current = true;
+
+    (async () => {
+      try {
+        const auth = getAuth();
+        const token = await auth?.currentUser?.getIdToken();
+        if (!token) return;
+        const res = await fetch('/api/contacts/stats/refresh', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) mutateUser();
+      } catch (err) {
+        console.warn('Stats backfill failed', err);
+      }
+    })();
+  }, [user, userDoc, mutateUser]);
 
   return (
     <>
@@ -396,17 +445,23 @@ export default function DashboardPage() {
           )}
 
           {/* Sub Navigation */}
-          <div className="dash-nav" style={{ 
-            display: 'flex', 
-            gap: '8px', 
-            marginBottom: '24px', 
-            borderBottom: '1px solid var(--border)' 
+          <div className="dash-nav" style={{
+            display: 'flex',
+            gap: '8px',
+            marginBottom: '24px',
+            borderBottom: '1px solid var(--border)'
           }}>
             {(['network', 'ai', 'categories', 'companies'] as Tab[]).map((tab) => (
               <button
                 key={tab}
                 className={`dash-tab ${activeTab === tab ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => {
+                  setActiveTab(tab);
+                  // Categories/Companies aggregate counts across the full
+                  // network; AI result clicks resolve contactIds from the
+                  // loaded contacts array. All three need the full load.
+                  if (tab !== 'network') requestFullLoad();
+                }}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -432,13 +487,21 @@ export default function DashboardPage() {
               </div>
             )}
             
-            {isLoading ? (
+            {isLoading && contacts.length === 0 ? (
               <div style={{ display: 'flex', justifyContent: 'center', padding: '64px' }}>
                 <div className="loading-spinner" />
               </div>
             ) : (
               <div className="tab-pane active" style={{ padding: '24px' }}>
-                {activeTab === 'network' && <SearchTab contacts={contacts} onSelectContact={(c) => setSelectedContact(c)} />}
+                {activeTab === 'network' && (
+                  <SearchTab
+                    contacts={contacts}
+                    isPartial={contactMode === 'recent'}
+                    isLoadingFull={fullLoadRequested && isLoading}
+                    onRequestFullLoad={requestFullLoad}
+                    onSelectContact={(c) => setSelectedContact(c)}
+                  />
+                )}
                 {activeTab === 'ai' && (
                   <AiAgentTab
                     onSelectContact={(contactId) => {
@@ -447,8 +510,26 @@ export default function DashboardPage() {
                     }}
                   />
                 )}
-                {activeTab === 'categories' && <CategoriesTab contacts={contacts} onSelectContact={(c) => setSelectedContact(c)} />}
-                {activeTab === 'companies' && <CompaniesTab contacts={contacts} onSelectContact={(c) => setSelectedContact(c)} />}
+                {activeTab === 'categories' && (
+                  fullLoadRequested && isLoading ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--muted)', padding: '24px' }}>
+                      <div className="loading-spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }} />
+                      <span>Loading full network for category breakdown...</span>
+                    </div>
+                  ) : (
+                    <CategoriesTab contacts={contacts} onSelectContact={(c) => setSelectedContact(c)} />
+                  )
+                )}
+                {activeTab === 'companies' && (
+                  fullLoadRequested && isLoading ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--muted)', padding: '24px' }}>
+                      <div className="loading-spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }} />
+                      <span>Loading full network for company breakdown...</span>
+                    </div>
+                  ) : (
+                    <CompaniesTab contacts={contacts} onSelectContact={(c) => setSelectedContact(c)} />
+                  )
+                )}
               </div>
             )}
           </div>
@@ -463,8 +544,9 @@ export default function DashboardPage() {
         title="Upload LinkedIn Connections"
       >
         <CsvUpload onComplete={() => {
-          mutate(); // Refresh SWR contacts data
-          setTimeout(() => setShowUpload(false), 3000); // Close modal 3s after finish
+          mutate();
+          mutateUser();
+          setTimeout(() => setShowUpload(false), 3000);
         }} />
       </Modal>
 

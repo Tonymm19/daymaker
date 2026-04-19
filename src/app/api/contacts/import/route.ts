@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseLinkedInCsv, generateMatchKey, buildSearchText } from '@/lib/csv/linkedin-parser';
 import { FIRESTORE_BATCH_LIMIT } from '@/lib/constants';
+import { recomputeContactStats } from '@/lib/firebase/stats';
 
 export const dynamic = 'force-dynamic';
 
@@ -189,6 +190,15 @@ export async function POST(req: NextRequest) {
       contactCount: FieldValue.increment(imported),
       updatedAt: now,
     });
+
+    // --- 9. Refresh cached contactStats so the dashboard stats bar reflects
+    // the import without scanning all contacts on the client. Runs a single
+    // projection scan + one count aggregation.
+    try {
+      await recomputeContactStats(adminDb, uid);
+    } catch (statsErr) {
+      console.warn('[Import] recomputeContactStats failed (non-fatal):', statsErr);
+    }
 
     return NextResponse.json({
       imported,

@@ -18,6 +18,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { embedBatch } from '@/lib/ai/rag';
 import { EMBEDDING_BATCH_SIZE } from '@/lib/constants';
+import { incrementContactStats } from '@/lib/firebase/stats';
 
 export const dynamic = 'force-dynamic';
 
@@ -154,6 +155,14 @@ export async function POST(req: NextRequest) {
 
     const remaining = await countRemaining();
     console.log(`[Embed] ◀ Done in ${Date.now() - t0}ms  processed=${processedCount}  remaining=${remaining}  errors=${errors.length}`);
+
+    if (processedCount > 0) {
+      try {
+        await incrementContactStats(adminDb, uid, { embedded: processedCount });
+      } catch (statsErr) {
+        console.warn('[Embed] incrementContactStats failed (non-fatal):', statsErr);
+      }
+    }
 
     return NextResponse.json({
       embedded: processedCount,

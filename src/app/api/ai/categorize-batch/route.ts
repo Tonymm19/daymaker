@@ -15,6 +15,7 @@ import { CATEGORIZATION_BATCH_SIZE, FIRESTORE_BATCH_LIMIT, CATEGORIES, type Cate
 import { callClaude, extractJson } from '@/lib/ai/claude';
 import { buildCategorizationSystemPrompt, buildCategorizationUserMessage } from '@/lib/ai/prompts/categorize';
 import { buildSearchText } from '@/lib/csv/linkedin-parser';
+import { incrementContactStats } from '@/lib/firebase/stats';
 
 export const dynamic = 'force-dynamic';
 
@@ -183,6 +184,14 @@ export async function POST(req: NextRequest) {
     }
 
     const remaining = await countRemaining();
+
+    if (totalCategorized > 0) {
+      try {
+        await incrementContactStats(adminDb, uid, { categorized: totalCategorized });
+      } catch (statsErr) {
+        console.warn('[Categorize] incrementContactStats failed (non-fatal):', statsErr);
+      }
+    }
 
     return NextResponse.json({
       categorized: totalCategorized,

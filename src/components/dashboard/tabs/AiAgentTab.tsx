@@ -1,4 +1,4 @@
-import { useState, useMemo, type ReactNode, type CSSProperties } from 'react';
+import { useState, useMemo, useEffect, type ReactNode, type CSSProperties } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import Link from 'next/link';
 import { getAuth } from '@/lib/firebase/config';
@@ -295,6 +295,15 @@ interface AiAgentTabProps {
   onSelectContact?: (contactId: string) => void;
 }
 
+// Phase labels shown below the spinner while /api/ai/query is running. Phases
+// advance on a timer, not real progress signals — the backend is a single
+// request — so the copy just matches user expectations for each stage.
+const PHASE_LABELS = [
+  'Searching your network...',
+  'Analyzing relevant contacts...',
+  'Generating recommendations...',
+];
+
 export default function AiAgentTab({ onSelectContact }: AiAgentTabProps = {}) {
   const [query, setQuery] = useState('');
   const [response, setResponse] = useState('');
@@ -302,6 +311,21 @@ export default function AiAgentTab({ onSelectContact }: AiAgentTabProps = {}) {
   const [error, setError] = useState('');
   const [metrics, setMetrics] = useState<{ tokensUsed: number; durationMs: number; ragUsed: boolean; contactsReferenced: number } | null>(null);
   const [matchedContacts, setMatchedContacts] = useState<MatchedContact[]>([]);
+  const [phaseIndex, setPhaseIndex] = useState(0);
+
+  // Walk phase labels on a simple schedule: 0 → 1 at 5s, 1 → 2 at 15s.
+  useEffect(() => {
+    if (!isLoading) {
+      setPhaseIndex(0);
+      return;
+    }
+    const t1 = setTimeout(() => setPhaseIndex(1), 5000);
+    const t2 = setTimeout(() => setPhaseIndex(2), 15000);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [isLoading]);
 
   // Matched contacts sorted longest-fullName-first so "John Smith" wins over
   // "John" when both would substring-match inside the same heading text.
@@ -481,9 +505,14 @@ export default function AiAgentTab({ onSelectContact }: AiAgentTabProps = {}) {
           
           <div className="ai-response-content" style={{ color: 'var(--text2)', fontSize: '14px', lineHeight: 1.6 }}>
             {isLoading && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div className="loading-spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }} />
-                <span>Analyzing your network...</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div className="loading-spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }} />
+                  <span style={{ color: 'var(--text)', fontWeight: 500 }}>{PHASE_LABELS[phaseIndex]}</span>
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--muted)', marginLeft: '32px' }}>
+                  Large networks may take 15-30 seconds
+                </div>
               </div>
             )}
             

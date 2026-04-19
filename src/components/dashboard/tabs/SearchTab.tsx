@@ -5,10 +5,33 @@ import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 
 const PAGE_SIZE = 50;
 
-export default function SearchTab({ contacts, onSelectContact }: { contacts: Contact[], onSelectContact?: (c: Contact) => void }) {
+interface SearchTabProps {
+  contacts: Contact[];
+  /** True when `contacts` is a partial list (the 50 most-recent, not the full network). */
+  isPartial?: boolean;
+  /** True when the parent is currently fetching the full contact set. */
+  isLoadingFull?: boolean;
+  /** Asks the parent to upgrade to a full contact load. Idempotent — fire freely. */
+  onRequestFullLoad?: () => void;
+  onSelectContact?: (c: Contact) => void;
+}
+
+export default function SearchTab({
+  contacts,
+  isPartial = false,
+  isLoadingFull = false,
+  onRequestFullLoad,
+  onSelectContact,
+}: SearchTabProps) {
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query, 300);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  // Searching a 50-contact slice would silently miss matches in the other
+  // 8,900+ records. Kick off the full load the moment the user starts typing.
+  useEffect(() => {
+    if (query && isPartial && onRequestFullLoad) onRequestFullLoad();
+  }, [query, isPartial, onRequestFullLoad]);
 
   const filteredContacts = useMemo(() => {
     if (!debouncedQuery) {
@@ -80,6 +103,19 @@ export default function SearchTab({ contacts, onSelectContact }: { contacts: Con
 
       <div className="results-meta" style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--muted)' }}>
         Showing {visibleContacts.length} of {filteredContacts.length} {filteredContacts.length === 1 ? 'result' : 'results'}
+        {isPartial && !debouncedQuery && (
+          <span style={{ marginLeft: '8px', color: 'var(--muted)' }}>
+            — 50 most recent.{' '}
+            <button
+              type="button"
+              onClick={() => onRequestFullLoad?.()}
+              disabled={isLoadingFull}
+              style={{ background: 'none', border: 'none', color: 'var(--orange)', cursor: 'pointer', padding: 0, fontSize: '13px', fontWeight: 600 }}
+            >
+              {isLoadingFull ? 'Loading full network...' : 'Load full network'}
+            </button>
+          </span>
+        )}
       </div>
 
       {/* Grid */}
@@ -144,7 +180,10 @@ export default function SearchTab({ contacts, onSelectContact }: { contacts: Con
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '24px' }}>
           <button
             className="btn"
-            onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
+            onClick={() => {
+              setVisibleCount(c => c + PAGE_SIZE);
+              if (isPartial && onRequestFullLoad) onRequestFullLoad();
+            }}
             style={{ padding: '10px 20px', fontSize: '14px' }}
           >
             Load More ({filteredContacts.length - visibleCount} remaining)

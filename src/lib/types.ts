@@ -19,6 +19,15 @@ export type FirestoreTimestamp = Timestamp;
 // User
 // ============================================
 
+export interface ContactStats {
+  total: number;
+  companies: number;
+  emails: number;
+  categorized: number;
+  embedded: number;
+  updatedAt: FirestoreTimestamp;
+}
+
 export interface DaymakerUser {
   uid: string;
   email: string;
@@ -28,6 +37,10 @@ export interface DaymakerUser {
   stripeSubscriptionId: string | null;
   linkedInImportedAt: FirestoreTimestamp | null;
   contactCount: number;
+  /** Cached aggregate counts for the stats bar. Refreshed on import/reset and
+   *  incremented by categorize/embed so the dashboard can show stats without
+   *  scanning the full contacts collection. */
+  contactStats?: ContactStats;
   northStar: string;
   rmConnected: boolean;
   rmPersonaTraits: string[];
