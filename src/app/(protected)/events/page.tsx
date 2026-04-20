@@ -22,6 +22,7 @@ import { getAuth } from '@/lib/firebase/config';
 import Modal from '@/components/ui/Modal';
 import Papa from 'papaparse';
 import type { EventBriefing } from '@/lib/types';
+import UpgradeCard from '@/components/ui/UpgradeCard';
 
 interface CalendarEvent {
   id: string;
@@ -52,6 +53,26 @@ interface LumaScrapedData {
   attendeeCount: number | null;
   lumaUrl: string;
 }
+
+interface EventbriteScrapedData {
+  eventTitle: string | null;
+  eventDescription: string | null;
+  eventDate: string | null;
+  eventEndDate: string | null;
+  eventLocation: string | null;
+  hosts: string[];
+  attendees: { name: string; company?: string; title?: string }[];
+  eventbriteUrl: string;
+}
+
+// Phase labels shown while /api/events/prebrief is running. Phases advance
+// on a timer, not real progress signals — the backend is a single batched
+// request.
+const BRIEFING_PHASE_LABELS = [
+  'Analyzing attendees...',
+  'Cross-referencing with your network...',
+  'Generating conversation starters...',
+];
 
 // ─── URL Detection ─────────────────────────────────────────────────
 function detectEventUrls(text: string | null): DetectedUrls {
@@ -161,6 +182,7 @@ export default function EventsPage() {
   const [eventDate, setEventDate] = useState('');
   const [eventLocation, setEventLocation] = useState('');
   const [eventDescription, setEventDescription] = useState('');
+  const [descExpanded, setDescExpanded] = useState(false);
   const [attendeeText, setAttendeeText] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
@@ -171,6 +193,23 @@ export default function EventsPage() {
   const [lumaData, setLumaData] = useState<LumaScrapedData | null>(null);
   const [lumaError, setLumaError] = useState('');
   const [showLumaPreview, setShowLumaPreview] = useState(false);
+  const [eventbriteLoading, setEventbriteLoading] = useState(false);
+  const [eventbriteData, setEventbriteData] = useState<EventbriteScrapedData | null>(null);
+  const [eventbriteError, setEventbriteError] = useState('');
+  const [showEventbritePreview, setShowEventbritePreview] = useState(false);
+
+  // Phased progress for briefing generation — advances on a timer, not real
+  // progress signals. Labels match user expectations for each stage.
+  const [phaseIndex, setPhaseIndex] = useState(0);
+
+  // Plan-limit error for event briefings (Pro-only on free tier)
+  const [limitReached, setLimitReached] = useState<{ message: string; upgradeUrl: string } | null>(null);
+
+  // Organizer outreach draft modal
+  const [showOrganizerModal, setShowOrganizerModal] = useState(false);
+  const [organizerSubject, setOrganizerSubject] = useState('');
+  const [organizerBody, setOrganizerBody] = useState('');
+  const [organizerCopied, setOrganizerCopied] = useState(false);
 
   // Source calendar event for the modal (null = manual creation)
   const [sourceCalendarEvent, setSourceCalendarEvent] = useState<CalendarEvent | null>(null);
@@ -262,6 +301,17 @@ export default function EventsPage() {
 
   useEffect(() => { fetchCalendarEvents(); }, [fetchCalendarEvents]);
 
+  // Walk briefing-generation phase labels: 0 → 1 at 5s, 1 → 2 at 15s.
+  useEffect(() => {
+    if (!isGenerating) {
+      setPhaseIndex(0);
+      return;
+    }
+    const t1 = setTimeout(() => setPhaseIndex(1), 5000);
+    const t2 = setTimeout(() => setPhaseIndex(2), 15000);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [isGenerating]);
+
   // ─── Connect / Disconnect handlers ────────────────────────────────
   const handleConnectGoogle = async () => {
     const token = await getIdToken();
@@ -297,6 +347,9 @@ export default function EventsPage() {
     setLumaData(null);
     setLumaError('');
     setShowLumaPreview(false);
+    setEventbriteData(null);
+    setEventbriteError('');
+    setShowEventbritePreview(false);
     setSourceCalendarEvent(calEvent);
 
     // Auto-populate form fields from calendar data
@@ -334,6 +387,9 @@ export default function EventsPage() {
     setLumaData(null);
     setLumaError('');
     setShowLumaPreview(false);
+    setEventbriteData(null);
+    setEventbriteError('');
+    setShowEventbritePreview(false);
     setGenerateError('');
     setShowModal(true);
   };
@@ -412,6 +468,69 @@ export default function EventsPage() {
     }
   };
 
+  // ─── Eventbrite Scraper ───────────────────────────────────────────
+  const handleImportFromEventbrite = async () => {
+    if (!detectedUrls.eventbrite) return;
+    setEventbriteLoading(true);
+    setEventbriteError('');
+    setEventbriteData(null);
+
+    try {
+      const token = await getIdToken();
+      if (!token) { setEventbriteError('Not authenticated'); setEventbriteLoading(false); return; }
+
+      const res = await fetch('/api/eventbrite/scrape-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ url: detectedUrls.eventbrite }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to scrape Eventbrite page');
+
+      const scraped: EventbriteScrapedData = data.data;
+      setEventbriteData(scraped);
+
+      // Enrich form (don't overwrite user edits)
+      if (!eventName && scraped.eventTitle) setEventName(scraped.eventTitle);
+      if (!eventLocation && scraped.eventLocation) setEventLocation(scraped.eventLocation);
+      if (!eventDate && scraped.eventDate) {
+        try {
+          const d = new Date(scraped.eventDate);
+          setEventDate(d.toISOString().split('T')[0]);
+        } catch { /* skip */ }
+      }
+      if (!eventDescription && scraped.eventDescription) setEventDescription(scraped.eventDescription);
+
+      // Merge scraped hosts + speakers into the attendee list
+      const scrapedAttendees: string[] = [];
+      for (const host of scraped.hosts) scrapedAttendees.push(`${host}, , Host`);
+      for (const att of scraped.attendees) {
+        const parts = [att.name, att.company || '', att.title || ''].filter(Boolean);
+        scrapedAttendees.push(parts.join(', '));
+      }
+      if (scrapedAttendees.length > 0) {
+        const existingNames = new Set(
+          attendeeText.split('\n').map(l => l.split(',')[0].trim().toLowerCase()).filter(Boolean)
+        );
+        const newAttendees = scrapedAttendees.filter(
+          line => !existingNames.has(line.split(',')[0].trim().toLowerCase())
+        );
+        if (newAttendees.length > 0) {
+          const merged = attendeeText ? `${attendeeText}\n${newAttendees.join('\n')}` : newAttendees.join('\n');
+          setAttendeeText(merged);
+        }
+      }
+
+      setShowEventbritePreview(true);
+    } catch (err: any) {
+      console.error('Eventbrite import failed:', err);
+      setEventbriteError(err.message || 'Failed to import from Eventbrite');
+    } finally {
+      setEventbriteLoading(false);
+    }
+  };
+
   // ─── File upload ──────────────────────────────────────────────────
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -430,6 +549,44 @@ export default function EventsPage() {
         setAttendeeText(prev => prev ? `${prev}\n${mappedText}` : mappedText);
       }
     });
+  };
+
+  // ─── Organizer Outreach ───────────────────────────────────────────
+  const openOrganizerDraft = () => {
+    const name = user?.displayName || user?.email?.split('@')[0] || 'A Daymaker Connect user';
+    const nameForEvent = eventName?.trim() || 'your event';
+    let dateLabel = 'an upcoming date';
+    if (eventDate) {
+      try {
+        const d = new Date(eventDate);
+        if (!Number.isNaN(d.getTime())) {
+          dateLabel = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+        }
+      } catch { /* keep default */ }
+    }
+    setOrganizerSubject(`Attendee list request for ${nameForEvent}`);
+    setOrganizerBody(
+      `Hi,\n\n` +
+      `I'm attending ${nameForEvent} on ${dateLabel} and I use a networking tool called Daymaker Connect that helps me prepare for events by identifying relevant connections among attendees.\n\n` +
+      `Would you be open to sharing the attendee list (or a portion of it) so I can make the most of the event? The list would only be used to match against my own LinkedIn network — no data is stored or shared publicly.\n\n` +
+      `Thank you,\n${name}`
+    );
+    setOrganizerCopied(false);
+    setShowOrganizerModal(true);
+  };
+
+  const copyOrganizerDraft = async () => {
+    const text = `Subject: ${organizerSubject}\n\n${organizerBody}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setOrganizerCopied(true);
+      setTimeout(() => setOrganizerCopied(false), 2500);
+    } catch { /* clipboard API may be unavailable */ }
+  };
+
+  const openOrganizerInMail = () => {
+    const mailto = `mailto:?subject=${encodeURIComponent(organizerSubject)}&body=${encodeURIComponent(organizerBody)}`;
+    window.location.href = mailto;
   };
 
   // ─── Submit ───────────────────────────────────────────────────────
@@ -511,6 +668,7 @@ export default function EventsPage() {
   const handleCreateEvent = async (e: FormEvent) => {
     e.preventDefault();
     setGenerateError('');
+    setLimitReached(null);
     setIsGenerating(true);
     const attendees = parseAttendeeText(attendeeText);
     if (!attendees.length) { setGenerateError('Please provide at least one attendee.'); setIsGenerating(false); return; }
@@ -529,8 +687,18 @@ export default function EventsPage() {
           attendees,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to generate briefing.');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (data.error === 'limit_reached') {
+          setLimitReached({
+            message: data.message || 'Event Briefings require a Pro subscription. Upgrade to unlock.',
+            upgradeUrl: data.upgradeUrl || '/settings',
+          });
+          setIsGenerating(false);
+          return;
+        }
+        throw new Error(data.error || 'Failed to generate briefing.');
+      }
       if (data.partial) {
         console.warn(
           `Pre-brief partial: ${data.generatedCount}/${data.requestedCount} attendees generated. Failed batches:`,
@@ -784,31 +952,42 @@ export default function EventsPage() {
               </div>
             )}
 
-            {/* Luma Import Button — shown when Luma URL detected */}
+            {/* Luma Detection Badge + Import Button */}
             {detectedUrls.luma && !showLumaPreview && (
-              <button type="button" onClick={handleImportFromLuma} disabled={lumaLoading}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px',
-                  background: 'linear-gradient(135deg, rgba(255,107,107,0.08) 0%, rgba(255,154,68,0.08) 100%)',
-                  border: '1px solid rgba(255,107,107,0.3)', borderRadius: '8px',
-                  cursor: lumaLoading ? 'wait' : 'pointer', width: '100%', textAlign: 'left',
-                  fontFamily: 'inherit', color: 'var(--text)', transition: 'all 0.2s',
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{
+                  alignSelf: 'flex-start',
+                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  padding: '4px 10px', borderRadius: '4px',
+                  fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px',
+                  background: 'rgba(255,107,107,0.12)', color: '#FF6B6B',
                 }}>
-                <span style={{ fontSize: '24px' }}>🎪</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#FF6B6B' }}>
-                    {lumaLoading ? 'Importing from Luma...' : 'Import Attendees from Luma'}
+                  🎪 LUMA EVENT DETECTED
+                </span>
+                <button type="button" onClick={handleImportFromLuma} disabled={lumaLoading}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px',
+                    background: 'linear-gradient(135deg, rgba(255,107,107,0.08) 0%, rgba(255,154,68,0.08) 100%)',
+                    border: '1px solid rgba(255,107,107,0.3)', borderRadius: '8px',
+                    cursor: lumaLoading ? 'wait' : 'pointer', width: '100%', textAlign: 'left',
+                    fontFamily: 'inherit', color: 'var(--text)', transition: 'all 0.2s',
+                  }}>
+                  <span style={{ fontSize: '24px' }}>🎪</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#FF6B6B' }}>
+                      {lumaLoading ? 'Importing from Luma...' : 'Import from Luma'}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {detectedUrls.luma}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {detectedUrls.luma}
-                  </div>
-                </div>
-                {lumaLoading ? (
-                  <div className="loading-spinner" style={{ width: '18px', height: '18px' }} />
-                ) : (
-                  <span style={{ color: '#FF6B6B', fontWeight: 600, fontSize: '13px' }}>Import →</span>
-                )}
-              </button>
+                  {lumaLoading ? (
+                    <div className="loading-spinner" style={{ width: '18px', height: '18px' }} />
+                  ) : (
+                    <span style={{ color: '#FF6B6B', fontWeight: 600, fontSize: '13px' }}>Import →</span>
+                  )}
+                </button>
+              </div>
             )}
 
             {/* Luma Error */}
@@ -848,16 +1027,84 @@ export default function EventsPage() {
               </div>
             )}
 
-            {/* Eventbrite detection notice */}
-            {detectedUrls.eventbrite && (
-              <div style={{
-                padding: '10px 14px', background: 'rgba(244,141,54,0.06)', border: '1px solid rgba(244,141,54,0.2)',
-                borderRadius: '6px', fontSize: '12px', color: '#F48D36',
-                display: 'flex', alignItems: 'center', gap: '8px',
-              }}>
-                <span>🎟</span>
-                <span>Eventbrite event detected — attendee import coming soon</span>
+            {/* Eventbrite Detection Badge + Import Button */}
+            {detectedUrls.eventbrite && !showEventbritePreview && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{
+                  alignSelf: 'flex-start',
+                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  padding: '4px 10px', borderRadius: '4px',
+                  fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px',
+                  background: 'rgba(244,141,54,0.12)', color: '#F48D36',
+                }}>
+                  🎟 EVENTBRITE EVENT DETECTED
+                </span>
+                <button type="button" onClick={handleImportFromEventbrite} disabled={eventbriteLoading}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px',
+                    background: 'linear-gradient(135deg, rgba(244,141,54,0.08) 0%, rgba(255,183,77,0.08) 100%)',
+                    border: '1px solid rgba(244,141,54,0.3)', borderRadius: '8px',
+                    cursor: eventbriteLoading ? 'wait' : 'pointer', width: '100%', textAlign: 'left',
+                    fontFamily: 'inherit', color: 'var(--text)', transition: 'all 0.2s',
+                  }}>
+                  <span style={{ fontSize: '24px' }}>🎟</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#F48D36' }}>
+                      {eventbriteLoading ? 'Importing from Eventbrite...' : 'Import from Eventbrite'}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {detectedUrls.eventbrite}
+                    </div>
+                  </div>
+                  {eventbriteLoading ? (
+                    <div className="loading-spinner" style={{ width: '18px', height: '18px' }} />
+                  ) : (
+                    <span style={{ color: '#F48D36', fontWeight: 600, fontSize: '13px' }}>Import →</span>
+                  )}
+                </button>
               </div>
+            )}
+
+            {eventbriteError && (
+              <div style={{ padding: '10px 14px', background: 'var(--red-dim)', color: 'var(--red)', borderRadius: '6px', fontSize: '12px' }}>
+                ⚠ {eventbriteError}
+              </div>
+            )}
+
+            {showEventbritePreview && eventbriteData && (
+              <div style={{
+                padding: '14px', background: 'rgba(244,141,54,0.06)', border: '1px solid rgba(244,141,54,0.2)',
+                borderRadius: '8px', fontSize: '13px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div style={{ fontWeight: 700, color: '#F48D36', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    🎟 Imported from Eventbrite
+                  </div>
+                  <span style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                    {eventbriteData.hosts.length} host{eventbriteData.hosts.length !== 1 ? 's' : ''} · {eventbriteData.attendees.length} speaker{eventbriteData.attendees.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                {eventbriteData.hosts.length > 0 && (
+                  <div style={{ fontSize: '12px', color: 'var(--text2)', marginBottom: '4px' }}>
+                    <strong style={{ color: 'var(--text)' }}>Organizers:</strong> {eventbriteData.hosts.join(', ')}
+                  </div>
+                )}
+                {eventbriteData.attendees.length > 0 && (
+                  <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
+                    <strong style={{ color: 'var(--text)' }}>Speakers:</strong>{' '}
+                    {eventbriteData.attendees.slice(0, 10).map(a => a.name).join(', ')}
+                    {eventbriteData.attendees.length > 10 && ` (+${eventbriteData.attendees.length - 10} more)`}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {limitReached && (
+              <UpgradeCard
+                message={limitReached.message}
+                upgradeUrl={limitReached.upgradeUrl}
+                onDismiss={() => setLimitReached(null)}
+              />
             )}
 
             {generateError && (
@@ -881,13 +1128,62 @@ export default function EventsPage() {
             </div>
 
             {/* Event description (pre-filled from calendar) */}
-            {eventDescription && (
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', color: 'var(--text2)', marginBottom: '8px' }}>Event Description</label>
-                <textarea className="auth-input" style={{ height: '80px', resize: 'vertical', fontSize: '12px' }}
-                  value={eventDescription} onChange={e => setEventDescription(e.target.value)} />
-              </div>
-            )}
+            {eventDescription && (() => {
+              const lineCount = eventDescription.split('\n').length;
+              const isLong = eventDescription.length > 220 || lineCount > 3;
+              return (
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', color: 'var(--text2)', marginBottom: '8px' }}>Event Description</label>
+                  {isLong && !descExpanded ? (
+                    <>
+                      <div
+                        style={{
+                          fontSize: '12px',
+                          color: 'var(--text2)',
+                          lineHeight: 1.6,
+                          background: 'var(--darker)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '6px',
+                          padding: '12px',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                          whiteSpace: 'pre-wrap',
+                        }}
+                      >
+                        {eventDescription}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setDescExpanded(true)}
+                        style={{ marginTop: '6px', background: 'none', border: 'none', color: 'var(--orange)', cursor: 'pointer', padding: 0, fontSize: '12px', fontWeight: 600 }}
+                      >
+                        Read more
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <textarea
+                        className="auth-input"
+                        style={{ height: isLong ? '200px' : '80px', resize: 'vertical', fontSize: '12px' }}
+                        value={eventDescription}
+                        onChange={e => setEventDescription(e.target.value)}
+                      />
+                      {isLong && (
+                        <button
+                          type="button"
+                          onClick={() => setDescExpanded(false)}
+                          style={{ marginTop: '6px', background: 'none', border: 'none', color: 'var(--orange)', cursor: 'pointer', padding: 0, fontSize: '12px', fontWeight: 600 }}
+                        >
+                          Read less
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Attendees */}
             <div>
@@ -922,26 +1218,125 @@ export default function EventsPage() {
               })()}
             </div>
 
+            {/* Organizer outreach — shown when the user has no attendee list yet */}
+            {(() => {
+              const hasAttendees = attendeeText.split('\n').some(l => l.trim().length > 0);
+              if (hasAttendees) return null;
+              return (
+                <div style={{
+                  padding: '14px 16px',
+                  background: 'var(--surface2)',
+                  border: '1px dashed var(--border)',
+                  borderRadius: '8px',
+                  display: 'flex', flexDirection: 'column', gap: '10px',
+                }}>
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>
+                      Don&apos;t have the attendee list?
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '4px', lineHeight: 1.5 }}>
+                      Ask the event organizer directly — we&apos;ll draft a friendly email you can paste into your mail client.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={openOrganizerDraft}
+                    className="btn"
+                    style={{ alignSelf: 'flex-start', padding: '8px 14px', fontSize: '13px' }}
+                  >
+                    ✉ Request List from Organizer
+                  </button>
+                </div>
+              );
+            })()}
+
             {(() => {
               const hasAttendees = attendeeText.split('\n').some(l => l.trim().length > 0);
               const disabled = isGenerating || !hasAttendees;
               return (
-                <button
-                  type="submit"
-                  className="btn primary"
-                  disabled={disabled}
-                  style={{
-                    marginTop: '4px',
-                    padding: '12px 24px',
-                    opacity: disabled ? 0.5 : 1,
-                    cursor: disabled ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  {isGenerating ? 'Generating Intelligence Brief...' : 'Generate Briefing'}
-                </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                  <button
+                    type="submit"
+                    className="btn primary"
+                    disabled={disabled}
+                    style={{
+                      padding: '12px 24px',
+                      opacity: disabled ? 0.5 : 1,
+                      cursor: disabled ? 'not-allowed' : 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                    }}
+                  >
+                    {isGenerating ? (
+                      <>
+                        <div className="loading-spinner" style={{ width: '16px', height: '16px' }} />
+                        <span>{BRIEFING_PHASE_LABELS[phaseIndex]}</span>
+                      </>
+                    ) : 'Generate Briefing'}
+                  </button>
+                  {isGenerating && (
+                    <div style={{ fontSize: '11px', color: 'var(--text2)', textAlign: 'center', fontStyle: 'italic' }}>
+                      This typically takes 15–30 seconds depending on the number of attendees
+                    </div>
+                  )}
+                </div>
               );
             })()}
           </form>
+        </Modal>
+      )}
+
+      {/* ═══ Organizer Outreach Draft Modal ══════════════════════════ */}
+      {showOrganizerModal && (
+        <Modal
+          isOpen={showOrganizerModal}
+          onClose={() => setShowOrganizerModal(false)}
+          title="Request Attendee List from Organizer"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text2)', lineHeight: 1.6 }}>
+              We&apos;ve drafted a friendly note you can send to the event organizer. Edit anything you like,
+              then copy it or open it directly in your mail client.
+            </p>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: 'var(--text2)', marginBottom: '6px' }}>Subject</label>
+              <input
+                type="text"
+                value={organizerSubject}
+                onChange={(e) => setOrganizerSubject(e.target.value)}
+                className="auth-input"
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: 'var(--text2)', marginBottom: '6px' }}>Message</label>
+              <textarea
+                value={organizerBody}
+                onChange={(e) => setOrganizerBody(e.target.value)}
+                className="auth-input"
+                style={{ height: '240px', resize: 'vertical', fontSize: '13px', lineHeight: 1.55 }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={copyOrganizerDraft}
+                className="btn"
+                style={{ padding: '8px 16px', fontSize: '13px' }}
+              >
+                {organizerCopied ? 'Copied ✓' : 'Copy to Clipboard 📋'}
+              </button>
+              <button
+                type="button"
+                onClick={openOrganizerInMail}
+                className="btn primary"
+                style={{ padding: '8px 16px', fontSize: '13px' }}
+              >
+                Open in Mail ✉
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
     </main>

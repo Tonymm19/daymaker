@@ -5,7 +5,7 @@
  *
  * Sticky top navigation matching the prototype aesthetic exactly.
  * Desktop: logo, nav tabs, RM Connect button, user avatar with dropdown.
- * Mobile (<768px): logo, hamburger menu, avatar. All nav + RM + Settings + Sign Out live in the slide-in panel.
+ * Mobile (<768px): logo, hamburger menu, avatar. All nav + RM + Profile + Sign Out live in the slide-in panel.
  */
 
 import { useState, useRef, useEffect } from 'react';
@@ -18,7 +18,7 @@ import { useTheme } from '@/lib/theme/ThemeContext';
 import Avatar from '@/components/ui/Avatar';
 
 const NAV_TABS = [
-  { label: 'Dashboard', href: '/dashboard' },
+  { label: 'Home', href: '/dashboard' },
   { label: 'Monthly Briefing', href: '/briefing' },
   { label: 'Event Pre-Brief', href: '/events' },
   { label: 'Deep Dive', href: '/deepdive' },
@@ -195,7 +195,7 @@ export default function TopNav() {
                 }}
                 className="dropdown-item"
               >
-                Settings
+                Profile
               </Link>
               <button
                 onClick={handleSignOut}
@@ -290,7 +290,7 @@ export default function TopNav() {
                 className={`mobile-menu-link ${pathname.startsWith('/settings') ? 'active' : ''}`}
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Settings
+                Profile
               </Link>
               <button
                 type="button"

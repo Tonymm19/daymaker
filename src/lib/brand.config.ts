@@ -27,16 +27,21 @@ export const BRAND = {
   proPriceMonthly: 29,
   proPriceCurrency: 'USD',
   
-  // Plan names
+  // Plan names. All limits are per calendar month and reset with the user's
+  // `currentMonthString` rollover. Infinity = unlimited.
   plans: {
     free: {
       name: 'Free',
-      queryLimit: 10,       // per month
+      queryLimit: 3,
+      deepDiveLimit: 1,
+      eventLimit: 0,        // Event Briefings are Pro-only
       contactLimit: 500,
     },
     pro: {
       name: 'Pro',
       queryLimit: Infinity,
+      deepDiveLimit: Infinity,
+      eventLimit: Infinity,
       contactLimit: Infinity,
     },
   },

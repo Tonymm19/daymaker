@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, type ReactNode, type CSSProperties } from
 import ReactMarkdown, { type Components } from 'react-markdown';
 import Link from 'next/link';
 import { getAuth } from '@/lib/firebase/config';
+import UpgradeCard from '@/components/ui/UpgradeCard';
 
 // Shape of the matched-contacts list returned by /api/ai/query. Used to map
 // names in the markdown response back to real contactIds so a click on the
@@ -304,11 +305,38 @@ const PHASE_LABELS = [
   'Generating recommendations...',
 ];
 
+// Extract the final question the agent ended on, if any. We look at the last
+// paragraph of the markdown response, strip heading/list markers, and return
+// the trailing question sentence so the UI can offer a one-click "Yes, do this".
+function extractTrailingQuestion(src: string): string | null {
+  if (!src) return null;
+  // Drop trailing whitespace and split into paragraphs.
+  const paragraphs = src.trim().split(/\n\s*\n/);
+  // Walk backwards through paragraphs skipping empty / non-prose blocks.
+  for (let i = paragraphs.length - 1; i >= 0; i--) {
+    let p = paragraphs[i].trim();
+    // Skip LinkedIn pill / blockquote / hr remnants.
+    if (!p || p.startsWith('---') || p.startsWith('>')) continue;
+    // Strip leading markdown markers: #, -, *, digits.
+    p = p.replace(/^[#>\-*\d.)\s]+/, '').trim();
+    if (!p) continue;
+    // The last sentence that ends in a '?' is the question we want.
+    const sentences = p.match(/[^.!?]*\?/g);
+    if (sentences && sentences.length > 0) {
+      return sentences[sentences.length - 1].trim();
+    }
+    // First non-empty paragraph didn't contain a question; stop searching.
+    return null;
+  }
+  return null;
+}
+
 export default function AiAgentTab({ onSelectContact }: AiAgentTabProps = {}) {
   const [query, setQuery] = useState('');
   const [response, setResponse] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [limitReached, setLimitReached] = useState<{ message: string; upgradeUrl: string } | null>(null);
   const [metrics, setMetrics] = useState<{ tokensUsed: number; durationMs: number; ragUsed: boolean; contactsReferenced: number } | null>(null);
   const [matchedContacts, setMatchedContacts] = useState<MatchedContact[]>([]);
   const [phaseIndex, setPhaseIndex] = useState(0);
@@ -369,6 +397,7 @@ export default function AiAgentTab({ onSelectContact }: AiAgentTabProps = {}) {
     setQuery(text);
     setIsLoading(true);
     setError('');
+    setLimitReached(null);
     setResponse('');
     setMetrics(null);
     setMatchedContacts([]);
@@ -389,7 +418,7 @@ export default function AiAgentTab({ onSelectContact }: AiAgentTabProps = {}) {
       // Cloud Run returns a plain-text/HTML page (not JSON) on 503/504 when
       // the container OOMs or exceeds the request timeout. Guard the parse
       // so we surface a friendly message instead of "Unexpected token <".
-      let data: { content?: string; response?: string; tokensUsed?: number; durationMs?: number; ragUsed?: boolean; contactsReferenced?: number; matchedContacts?: MatchedContact[]; error?: string } = {};
+      let data: { content?: string; response?: string; tokensUsed?: number; durationMs?: number; ragUsed?: boolean; contactsReferenced?: number; matchedContacts?: MatchedContact[]; error?: string; message?: string; upgradeUrl?: string } = {};
       try {
         data = await res.json();
       } catch {
@@ -397,6 +426,13 @@ export default function AiAgentTab({ onSelectContact }: AiAgentTabProps = {}) {
       }
 
       if (!res.ok) {
+        if (data.error === 'limit_reached') {
+          setLimitReached({
+            message: data.message || "You've used your free AI queries this month. Upgrade to Pro for unlimited queries.",
+            upgradeUrl: data.upgradeUrl || '/settings',
+          });
+          return;
+        }
         if (res.status === 501) {
           throw new Error('AI Agent functionality is not yet implemented (Pending Task 6).');
         }
@@ -516,6 +552,14 @@ export default function AiAgentTab({ onSelectContact }: AiAgentTabProps = {}) {
               </div>
             )}
             
+            {limitReached && (
+              <UpgradeCard
+                message={limitReached.message}
+                upgradeUrl={limitReached.upgradeUrl}
+                onDismiss={() => setLimitReached(null)}
+              />
+            )}
+
             {error && (
               <div style={{ color: 'var(--red)', padding: '16px', background: 'var(--red-dim)', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>{error}</span>
@@ -558,7 +602,43 @@ export default function AiAgentTab({ onSelectContact }: AiAgentTabProps = {}) {
                     </div>
                   );
                 })}
-                {metrics && (
+                {(() => {
+                  const trailing = extractTrailingQuestion(response);
+                  if (!trailing) return null;
+                  return (
+                    <div
+                      style={{
+                        marginTop: '20px',
+                        padding: '14px 16px',
+                        background: 'var(--orange-dim)',
+                        border: '1px solid var(--orange)',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '12px',
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <div style={{ fontSize: '13px', color: 'var(--text)', flex: 1, minWidth: 0 }}>
+                        <span style={{ color: 'var(--orange)', fontWeight: 700, letterSpacing: '0.5px', fontSize: '11px', textTransform: 'uppercase', marginRight: '8px' }}>
+                          Follow up
+                        </span>
+                        {trailing}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleAsk('Yes, please do that.')}
+                        disabled={isLoading}
+                        className="btn primary"
+                        style={{ padding: '8px 14px', fontSize: '13px', whiteSpace: 'nowrap' }}
+                      >
+                        Yes, do this
+                      </button>
+                    </div>
+                  );
+                })()}
+                {metrics && process.env.NEXT_PUBLIC_DEBUG === 'true' && (
                   <div style={{
                     marginTop: '24px',
                     paddingTop: '16px',

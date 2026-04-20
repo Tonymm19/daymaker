@@ -18,7 +18,7 @@ const FEATURES = [
     icon: '⚡',
     title: 'Deep Dive Synergy',
     body:
-      'Agent-to-agent synergy analysis between you and any contact. Discover mutual connections, collaboration opportunities, and next steps.',
+      'Strategic synergy analysis between you and any contact. Discover mutual connections, collaboration opportunities, and next steps.',
   },
 ];
 

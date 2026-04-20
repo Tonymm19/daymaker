@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useContacts } from '@/lib/hooks/useContacts';
 import { useUser } from '@/lib/hooks/useUser';
 import { useAuth } from '@/lib/firebase/AuthContext';
-import { getAuth } from '@/lib/firebase/config';
+import { getAuth, getDb } from '@/lib/firebase/config';
+import { doc as fsDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import Modal from '@/components/ui/Modal';
 import CsvUpload from '@/components/import/CsvUpload';
 import ContactDetailModal from '@/components/dashboard/ContactDetailModal';
@@ -38,6 +39,37 @@ export default function DashboardPage() {
 
   const { userDoc, mutate: mutateUser } = useUser();
   const { user } = useAuth();
+
+  // Hide filter — derived once from the user's hiddenContacts array. Applied to
+  // every tab so no hidden contact shows up in Network, Categories, Companies,
+  // or the AI Agent result click-through. Server-side routes filter as well.
+  const hiddenSet = useMemo(
+    () => new Set(userDoc?.hiddenContacts || []),
+    [userDoc?.hiddenContacts],
+  );
+  const visibleContacts = useMemo(
+    () => (hiddenSet.size === 0 ? contacts : contacts.filter((c) => !hiddenSet.has(c.contactId))),
+    [contacts, hiddenSet],
+  );
+
+  const handleHideContact = useCallback(
+    async (contactId: string) => {
+      if (!user) return;
+      const db = getDb();
+      if (!db) return;
+      try {
+        await updateDoc(fsDoc(db, 'users', user.uid), {
+          hiddenContacts: arrayUnion(contactId),
+          updatedAt: new Date(),
+        });
+        await mutateUser();
+      } catch (err) {
+        console.error('Failed to hide contact', err);
+      }
+    },
+    [user, mutateUser],
+  );
+
   const [activeTab, setActiveTab] = useState<Tab>('network');
   const [showUpload, setShowUpload] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
@@ -277,7 +309,7 @@ export default function DashboardPage() {
           borderBottom: '1px solid var(--border)' 
         }}>
           <div>
-            <h1 style={{ fontSize: '28px', margin: '0 0 8px 0', color: 'var(--text)' }}>Daymaker Dashboard</h1>
+            <h1 style={{ fontSize: '28px', margin: '0 0 8px 0', color: 'var(--text)' }}>Home</h1>
             <div style={{ color: 'var(--text2)', fontSize: '14px' }}>
               Your network intelligence hub. {isLoading ? 'Loading...' : `${stats.total} total contacts.`}
             </div>
@@ -295,59 +327,73 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Empty state — no contacts uploaded yet */}
-        {!isLoading && stats.total === 0 && (
+        {/* First-paint skeleton — user doc and contacts are still resolving.
+            Replaces the stat-bar-with-"..."s and blank tab area so there's
+            something shimmer-y to look at rather than a bare page. */}
+        {!userDoc && isLoading && (
+          <div style={{ marginTop: '32px' }}>
+            <div className="skeleton skeleton-hero" />
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                gap: '8px',
+                marginBottom: '24px',
+              }}
+            >
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="skeleton skeleton-stat" />
+              ))}
+            </div>
+            <div className="skeleton" style={{ height: '40px', marginBottom: '16px' }} />
+            <div className="skeleton" style={{ height: '220px' }} />
+          </div>
+        )}
+
+        {/* Guided setup — shown until the user has uploaded any contacts. */}
+        {userDoc && !isLoading && stats.total === 0 && (
+          <GuidedSetup
+            userDoc={userDoc}
+            onUpload={() => setShowUpload(true)}
+          />
+        )}
+
+        {/* Subtle nudge for returning users who have contacts but no North Star. */}
+        {userDoc && !isLoading && stats.total > 0 && !userDoc?.northStar && (
           <div
             style={{
-              marginTop: '48px',
-              padding: '48px 32px',
-              background: 'var(--surface)',
-              border: '1px dashed var(--border)',
-              borderRadius: '12px',
-              textAlign: 'center',
+              marginTop: '20px',
+              padding: '12px 16px',
+              background: 'var(--orange-dim)',
+              border: '1px solid var(--orange)',
+              borderRadius: '8px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '12px',
+              flexWrap: 'wrap',
+              fontSize: '13px',
+              color: 'var(--text)',
             }}
           >
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🌅</div>
-            <h2
-              style={{
-                fontFamily: "'Instrument Serif', Georgia, serif",
-                fontSize: '24px',
-                color: 'var(--text)',
-                margin: '0 0 8px 0',
-              }}
-            >
-              Upload your LinkedIn data to get started
-            </h2>
-            <p
-              style={{
-                color: 'var(--text2)',
-                fontSize: '14px',
-                maxWidth: '460px',
-                margin: '0 auto 24px',
-                lineHeight: 1.6,
-              }}
-            >
-              Import your LinkedIn connections to unlock AI-powered network intelligence, briefings, and Deep Dive analyses.
-            </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button className="btn primary" onClick={() => setShowUpload(true)} style={{ padding: '10px 20px', fontSize: '14px' }}>
-                Upload CSV
-              </button>
-              <a
-                href="https://www.linkedin.com/mypreferences/d/download-my-data"
-                target="_blank"
-                rel="noreferrer"
-                className="btn"
-                style={{ padding: '10px 20px', fontSize: '14px', textDecoration: 'none' }}
-              >
-                Get LinkedIn Export ↗
-              </a>
-            </div>
+            <span>
+              <strong style={{ color: 'var(--orange)' }}>Tip:</strong> Set your North Star to get more targeted results.
+            </span>
+            <a href="/settings" style={{ color: 'var(--orange)', fontWeight: 600, fontSize: '13px', textDecoration: 'none' }}>
+              Go to Profile →
+            </a>
           </div>
         )}
 
         {/* Dashboard Content */}
-        <div id="sec-dashboard" style={{ marginTop: '32px', display: !isLoading && stats.total === 0 ? 'none' : undefined }}>
+        <div id="sec-dashboard" style={{
+          marginTop: '32px',
+          display: (!userDoc && isLoading) || (!isLoading && stats.total === 0) ? 'none' : undefined,
+        }}>
+
+          {/* Your Next Event — event-driven entry point. Primary action, so it
+              sits above the upsell banner. */}
+          <NextEventHero />
 
           {userDoc?.plan === 'free' && (
             <div style={{
@@ -355,23 +401,22 @@ export default function DashboardPage() {
               border: '1px solid var(--orange)',
               padding: '16px 24px',
               borderRadius: '8px',
-              marginBottom: '32px',
+              margin: '24px 0 32px',
               display: 'flex',
               justifyContent: 'space-between',
-              alignItems: 'center'
+              alignItems: 'center',
+              gap: '16px',
+              flexWrap: 'wrap',
             }}>
               <div>
                 <h4 style={{ margin: '0 0 4px 0', color: 'var(--text)', fontSize: '15px' }}>Unlock Unlimited AI Intelligence</h4>
-                <div style={{ fontSize: '13px', color: 'var(--text2)' }}>You are on the Free tier. Upgrade to access unlimited AI Agent queries and full network capacity.</div>
+                <div style={{ fontSize: '13px', color: 'var(--text2)' }}>Free tier: 3 AI queries, 1 Deep Dive, 0 event briefings per month. Upgrade for unlimited access.</div>
               </div>
               <button onClick={handleCheckout} className="btn" style={{ padding: '8px 16px', fontSize: '13px', textDecoration: 'none' }}>
                 Upgrade to Pro
               </button>
             </div>
           )}
-
-          {/* Your Next Event — event-driven entry point */}
-          <NextEventHero />
 
           {/* Compact Quick Stats — reference data, not the lead */}
           <div className="stat-bar" style={{
@@ -495,16 +540,18 @@ export default function DashboardPage() {
               <div className="tab-pane active" style={{ padding: '24px' }}>
                 {activeTab === 'network' && (
                   <SearchTab
-                    contacts={contacts}
+                    contacts={visibleContacts}
                     isPartial={contactMode === 'recent'}
                     isLoadingFull={fullLoadRequested && isLoading}
                     onRequestFullLoad={requestFullLoad}
                     onSelectContact={(c) => setSelectedContact(c)}
+                    onHideContact={handleHideContact}
                   />
                 )}
                 {activeTab === 'ai' && (
                   <AiAgentTab
                     onSelectContact={(contactId) => {
+                      if (hiddenSet.has(contactId)) return;
                       const c = contacts.find(x => x.contactId === contactId);
                       if (c) setSelectedContact(c);
                     }}
@@ -517,7 +564,7 @@ export default function DashboardPage() {
                       <span>Loading full network for category breakdown...</span>
                     </div>
                   ) : (
-                    <CategoriesTab contacts={contacts} onSelectContact={(c) => setSelectedContact(c)} />
+                    <CategoriesTab contacts={visibleContacts} onSelectContact={(c) => setSelectedContact(c)} onHideContact={handleHideContact} />
                   )
                 )}
                 {activeTab === 'companies' && (
@@ -527,7 +574,7 @@ export default function DashboardPage() {
                       <span>Loading full network for company breakdown...</span>
                     </div>
                   ) : (
-                    <CompaniesTab contacts={contacts} onSelectContact={(c) => setSelectedContact(c)} />
+                    <CompaniesTab contacts={visibleContacts} onSelectContact={(c) => setSelectedContact(c)} onHideContact={handleHideContact} />
                   )
                 )}
               </div>
@@ -556,6 +603,8 @@ export default function DashboardPage() {
         isOpen={!!selectedContact}
         onClose={() => setSelectedContact(null)}
         northStar={userDoc?.northStar || ''}
+        currentGoal={userDoc?.currentGoal || ''}
+        connectionType={userDoc?.connectionType || ''}
         onStartersUpdated={(contactId, starters) => {
           // Optimistically patch the SWR contacts cache so the next modal open
           // for this contact reads the saved starters without refetching.
@@ -575,5 +624,143 @@ export default function DashboardPage() {
         }}
       />
     </>
+  );
+}
+
+// ============================================================================
+// GuidedSetup — 4-step onboarding card shown until the user uploads contacts.
+// Steps check completion in real-time against the current user doc so
+// uploading data or setting a goal in another tab ticks the box immediately.
+// ============================================================================
+
+interface GuidedSetupProps {
+  userDoc: ReturnType<typeof useUser>['userDoc'];
+  onUpload: () => void;
+}
+
+function GuidedSetup({ userDoc, onUpload }: GuidedSetupProps) {
+  const hasContacts = (userDoc?.contactCount ?? 0) > 0;
+  const hasNorthStar = !!userDoc?.northStar?.trim();
+  const hasCurrentGoal = !!userDoc?.currentGoal?.trim();
+  const hasCalendar = !!(userDoc?.googleCalendarConnected || userDoc?.microsoftCalendarConnected);
+
+  const steps = [
+    {
+      title: 'Upload your LinkedIn data',
+      body: 'Import your connections to unlock the network intelligence tools.',
+      done: hasContacts,
+      cta: (
+        <button className="btn primary" onClick={onUpload} style={{ padding: '8px 16px', fontSize: '13px' }}>
+          Upload CSV
+        </button>
+      ),
+    },
+    {
+      title: 'Set your North Star goal',
+      body: 'Your long-term direction — anchors every AI recommendation.',
+      done: hasNorthStar,
+      cta: (
+        <a href="/settings" className="btn" style={{ padding: '8px 16px', fontSize: '13px', textDecoration: 'none' }}>
+          Open Profile
+        </a>
+      ),
+    },
+    {
+      title: 'Set your current goal',
+      body: "What you're working toward right now. Guides short-horizon suggestions.",
+      done: hasCurrentGoal,
+      cta: (
+        <a href="/settings" className="btn" style={{ padding: '8px 16px', fontSize: '13px', textDecoration: 'none' }}>
+          Open Profile
+        </a>
+      ),
+    },
+    {
+      title: 'Connect your calendar',
+      body: 'Auto-import upcoming events for pre-briefings.',
+      done: hasCalendar,
+      cta: (
+        <a href="/events" className="btn" style={{ padding: '8px 16px', fontSize: '13px', textDecoration: 'none' }}>
+          Event Pre-Brief
+        </a>
+      ),
+    },
+  ];
+
+  const completedCount = steps.filter((s) => s.done).length;
+
+  return (
+    <div
+      style={{
+        marginTop: '32px',
+        padding: '32px',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: '12px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+        <span style={{ fontSize: '32px' }}>🌅</span>
+        <h2
+          style={{
+            fontFamily: "'Instrument Serif', Georgia, serif",
+            fontSize: '24px',
+            color: 'var(--text)',
+            margin: 0,
+          }}
+        >
+          Let&apos;s get your network set up
+        </h2>
+      </div>
+      <p style={{ color: 'var(--text2)', fontSize: '14px', margin: '0 0 24px 0', lineHeight: 1.6 }}>
+        Four quick steps and you&apos;re ready to turn your contacts into actionable intelligence.
+        {' '}
+        <span style={{ color: 'var(--muted)', fontSize: '12px' }}>({completedCount}/{steps.length} complete)</span>
+      </p>
+
+      <ol style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {steps.map((step, idx) => (
+          <li
+            key={step.title}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16px',
+              padding: '16px',
+              background: step.done ? 'var(--green-dim)' : 'var(--darker)',
+              border: `1px solid ${step.done ? 'var(--green)' : 'var(--border)'}`,
+              borderRadius: '8px',
+            }}
+          >
+            <div
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: step.done ? 'var(--green)' : 'var(--surface)',
+                color: step.done ? 'var(--darker)' : 'var(--muted)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 700,
+                fontSize: '14px',
+                flexShrink: 0,
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+              aria-hidden="true"
+            >
+              {step.done ? '✓' : idx + 1}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>{step.title}</div>
+              <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '2px' }}>{step.body}</div>
+            </div>
+            <div style={{ flexShrink: 0 }}>{step.done ? (
+              <span style={{ fontSize: '11px', color: 'var(--green)', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase' }}>Done</span>
+            ) : step.cta}</div>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }

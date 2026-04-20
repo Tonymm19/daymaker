@@ -1,4 +1,38 @@
 import { buildRmContextBlock, type RmContextFields } from '@/lib/ai/rm-context';
+import type { OnboardingAnswers } from '@/lib/types';
+
+const CONNECTION_TYPE_LABELS: Record<string, string> = {
+  cofounder: 'a co-founder',
+  client: 'a client',
+  investor: 'an investor',
+  collaborator: 'a collaborator',
+  mentor: 'a mentor',
+  other: 'someone who could help in another way',
+};
+
+function formatGoalsBlock(
+  northStar: string,
+  currentGoal?: string,
+  connectionType?: string,
+  onboardingAnswers?: OnboardingAnswers | null,
+): string {
+  const lines: string[] = [];
+  lines.push(`- **North Star Goal**: ${northStar || 'Building a robust, high-value professional network.'}`);
+  if (currentGoal && currentGoal.trim()) {
+    lines.push(`- **Current Goal**: ${currentGoal.trim()}`);
+  }
+  if (connectionType) {
+    const label = CONNECTION_TYPE_LABELS[connectionType] || connectionType;
+    lines.push(`- **Seeking**: ${label}`);
+  }
+  if (onboardingAnswers?.ninetyDayGoal?.trim()) {
+    lines.push(`- **90-Day Goal & Who Needs to Be in the Room**: ${onboardingAnswers.ninetyDayGoal.trim()}`);
+  }
+  if (onboardingAnswers?.successfulConnection?.trim()) {
+    lines.push(`- **What a Successful Connection Looks Like This Month**: ${onboardingAnswers.successfulConnection.trim()}`);
+  }
+  return lines.join('\n');
+}
 
 export function buildQuerySystemPrompt(
   displayName: string,
@@ -6,6 +40,9 @@ export function buildQuerySystemPrompt(
   rmPersonaTraits: string[],
   contextData: any[],
   rm?: RmContextFields | null,
+  currentGoal?: string,
+  connectionType?: string,
+  onboardingAnswers?: OnboardingAnswers | null,
 ): string {
   const contextString = contextData
     .map(c => {
@@ -22,9 +59,11 @@ Your goal is to parse their network and proactively suggest high-value interacti
 
 ### Client Profile
 - **Client Name**: ${displayName}
-- **North Star Goal**: ${northStar || 'Building a robust, high-value professional network.'}
+${formatGoalsBlock(northStar, currentGoal, connectionType, onboardingAnswers)}
 - **Your Persona as an RM**: ${rmPersonaTraits.length > 0 ? rmPersonaTraits.join(', ') : 'Professional, insightful, strategic, and concise.'}
 ${rmBlock}
+
+When the client has an active **Current Goal** or **Seeking** preference, weight the short-horizon need heavily in your ranking. The North Star sets long-term direction; the Current Goal tells you what matters this quarter.
 
 ### Matching Rules
 

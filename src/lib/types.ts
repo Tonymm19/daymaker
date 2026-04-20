@@ -45,6 +45,19 @@ export interface DaymakerUser {
    *  scanning the full contacts collection. */
   contactStats?: ContactStats;
   northStar: string;
+  /** Shorter-horizon goal: what the user is working toward right now and would
+   *  accept an introduction to accelerate. Feeds into every AI prompt alongside
+   *  the North Star. */
+  currentGoal?: string;
+  /** The kind of connection the user needs next — one of:
+   *  'cofounder' | 'client' | 'investor' | 'collaborator' | 'mentor' | 'other'. */
+  connectionType?: string;
+  /** Short free-text answers collected on Profile to enrich AI prompts.
+   *  Fed into query and Deep Dive prompts as additional user context. */
+  onboardingAnswers?: OnboardingAnswers;
+  /** contactIds the user has chosen to hide from all list views, AI results,
+   *  and event attendee matching. Filtered in both the client and the server. */
+  hiddenContacts?: string[];
   rmConnected: boolean;
   rmPersonaTraits: string[];
   /** Reflections Match Bearer token. Server-side only — never returned in
@@ -58,6 +71,7 @@ export interface DaymakerUser {
   rmTrackingInterests?: string[];
   rmLastSyncedAt?: FirestoreTimestamp | null;
   currentMonthQueries: number;
+  currentMonthDeepDives: number;
   currentMonthEvents: number;
   currentMonthString: string;
   googleCalendarConnected: boolean;
@@ -68,6 +82,14 @@ export interface DaymakerUser {
   microsoftCalendarRefreshToken: string | null;
   createdAt: FirestoreTimestamp;
   updatedAt: FirestoreTimestamp;
+}
+
+export interface OnboardingAnswers {
+  /** "What's the one thing you're trying to make happen in the next 90 days,
+   *  and who would need to be in the room for it to move?" */
+  ninetyDayGoal?: string;
+  /** "What does a successful connection look like for you this month?" */
+  successfulConnection?: string;
 }
 
 export interface RmExpertiseArea {
@@ -181,6 +203,12 @@ export interface EventAttendee {
   conversationStarters: string[];
   networkGapAnalysis: string;
   followUpRecommendation: string;
+  /** Set when the attendee matches a contact in the user's network, enabling Deep Dive. */
+  contactId?: string;
+  /** LinkedIn profile URL — from network match if available, otherwise a search URL. */
+  linkedInUrl?: string;
+  /** Profile photo URL if available (not yet populated by any pipeline). */
+  photoUrl?: string;
 }
 
 // ============================================

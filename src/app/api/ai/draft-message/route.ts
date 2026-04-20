@@ -15,7 +15,22 @@ export async function POST(request: Request) {
     await getAuth().verifyIdToken(token);
 
     const body = await request.json();
-    const { contactName, company, position, northStar } = body;
+    const { contactName, company, position, northStar, currentGoal, connectionType } = body;
+
+    const connectionTypeLabels: Record<string, string> = {
+      cofounder: 'a co-founder',
+      client: 'a client',
+      investor: 'an investor',
+      collaborator: 'a collaborator',
+      mentor: 'a mentor',
+      other: 'another helpful connection',
+    };
+    const seekingLabel = connectionType ? (connectionTypeLabels[connectionType] || connectionType) : '';
+    const goalLines = [
+      `The user's primary networking goal (North Star) is: ${northStar || 'Build meaningful professional connections.'}`,
+      currentGoal && String(currentGoal).trim() ? `The user's current goal is: ${String(currentGoal).trim()}` : '',
+      seekingLabel ? `The user is currently seeking: ${seekingLabel}` : '',
+    ].filter(Boolean).join('\n');
 
     const systemPrompt = `You are an expert executive networking assistant.
 Draft a highly personalized, concise LinkedIn direct message outreach to the following contact.
@@ -26,8 +41,8 @@ Target Contact: ${contactName}
 Company: ${company || 'Unknown'}
 Position: ${position || 'Unknown'}
 
-The user's primary networking goal (North Star) is: ${northStar || 'Build meaningful professional connections.'}
-The message should loosely tie into the user's goal without being overly salesy.`;
+${goalLines}
+The message should tie into the user's goals without being overly salesy. When a Current Goal or Seeking preference is present, weight that short-horizon need heavily.`;
 
     const claudeResult = await callClaude({
       systemPrompt: 'You write excellent, warm outreach messages.',

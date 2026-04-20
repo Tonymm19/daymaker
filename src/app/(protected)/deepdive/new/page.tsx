@@ -8,6 +8,7 @@ import { getDb } from '@/lib/firebase/config';
 import { doc, getDoc, collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import type { Contact, DeepDive } from '@/lib/types';
 import Link from 'next/link';
+import UpgradeCard from '@/components/ui/UpgradeCard';
 
 export default function DeepDiveNewPage() {
   const { user } = useAuth();
@@ -18,6 +19,8 @@ export default function DeepDiveNewPage() {
   const [targetContact, setTargetContact] = useState<Contact | null>(null);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [limitReached, setLimitReached] = useState<{ message: string; upgradeUrl: string } | null>(null);
+  const [genError, setGenError] = useState('');
 
   useEffect(() => {
     async function fetchContact() {
@@ -73,24 +76,36 @@ export default function DeepDiveNewPage() {
   const handleGenerate = async () => {
     if (!targetContact || !user?.uid) return;
     setIsGenerating(true);
+    setLimitReached(null);
+    setGenError('');
     try {
       const token = await getAuth()?.currentUser?.getIdToken();
       const res = await fetch('/api/deepdive/generate', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ userId: user.uid, targetContactId: targetContact.contactId })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (data.error === 'limit_reached') {
+          setLimitReached({
+            message: data.message || "You've used your free Deep Dive this month. Upgrade to Pro for unlimited Deep Dives.",
+            upgradeUrl: data.upgradeUrl || '/settings',
+          });
+          setIsGenerating(false);
+          return;
+        }
+        throw new Error(data.error || `Generation failed (HTTP ${res.status})`);
+      }
 
       // Redirect to the newly generated Deep Dive
       router.push(`/deepdive/${data.deepdiveId}`);
     } catch (err: any) {
       console.error(err);
-      alert('Generation Failed: ' + err.message);
+      setGenError(err.message || 'Generation failed.');
       setIsGenerating(false);
     }
   };
@@ -111,7 +126,7 @@ export default function DeepDiveNewPage() {
   return (
     <main style={{ padding: '32px', maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
       <div style={{ fontSize: '13px', color: 'var(--orange)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700, marginBottom: '24px' }}>
-        Initiate Agentic Deep Dive
+        Deep Dive Analysis
       </div>
       
       <div className="card" style={{ padding: '32px', width: '100%', maxWidth: '500px', border: '1px solid var(--border)', textAlign: 'center' }}>
@@ -128,21 +143,30 @@ export default function DeepDiveNewPage() {
           {targetContact.company || 'Unknown Company'}
         </div>
 
-        {isGenerating ? (
+        {limitReached ? (
+          <UpgradeCard message={limitReached.message} upgradeUrl={limitReached.upgradeUrl} />
+        ) : isGenerating ? (
           <div style={{ textAlign: 'center' }}>
-            <div className="spinner" style={{ 
-              width: '24px', height: '24px', border: '3px solid var(--dark)', 
-              borderTop: '3px solid var(--orange)', borderRadius: '50%', 
-              animation: 'spin 1s linear infinite', margin: '0 auto 16px' 
+            <div className="spinner" style={{
+              width: '24px', height: '24px', border: '3px solid var(--dark)',
+              borderTop: '3px solid var(--orange)', borderRadius: '50%',
+              animation: 'spin 1s linear infinite', margin: '0 auto 16px'
             }}></div>
             <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-            <div style={{ fontSize: '14px', color: 'var(--text)' }}>Running 4-Round Agent Dialogue...</div>
+            <div style={{ fontSize: '14px', color: 'var(--text)' }}>Generating synergy analysis...</div>
             <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '8px' }}>This may take 15-30 seconds. Do not close this page.</div>
           </div>
         ) : (
-          <button onClick={handleGenerate} className="btn primary" style={{ width: '100%', padding: '16px', fontSize: '15px' }}>
-            Begin Synergy Analysis
-          </button>
+          <>
+            {genError && (
+              <div style={{ padding: '10px 14px', marginBottom: '12px', background: 'var(--red-dim)', color: 'var(--red)', borderRadius: '6px', fontSize: '13px' }}>
+                {genError}
+              </div>
+            )}
+            <button onClick={handleGenerate} className="btn primary" style={{ width: '100%', padding: '16px', fontSize: '15px' }}>
+              Begin Synergy Analysis
+            </button>
+          </>
         )}
       </div>
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Contact } from '@/lib/types';
 import Link from 'next/link';
+import HideButton from '@/components/dashboard/HideButton';
 
 const PAGE_SIZE = 50;
 
@@ -13,7 +14,7 @@ const CATEGORIES = [
 
 type Category = typeof CATEGORIES[number];
 
-export default function CategoriesTab({ contacts, onSelectContact }: { contacts: Contact[], onSelectContact?: (c: Contact) => void }) {
+export default function CategoriesTab({ contacts, onSelectContact, onHideContact }: { contacts: Contact[], onSelectContact?: (c: Contact) => void, onHideContact?: (contactId: string) => void }) {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
@@ -133,13 +134,18 @@ export default function CategoriesTab({ contacts, onSelectContact }: { contacts:
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
             {visibleContacts.map(contact => (
               <div key={contact.contactId} className="c-card card" onClick={() => onSelectContact && onSelectContact(contact)} style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px', cursor: 'pointer' }}>
-                <div className="c-hdr">
-                  <div className="c-name" style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text)' }}>
-                    {contact.fullName}
+                <div className="c-hdr" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div className="c-name" style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text)' }}>
+                      {contact.fullName}
+                    </div>
+                    <div className="c-title" style={{ fontSize: '12px', color: 'var(--text2)' }}>
+                      {contact.position || 'No Title'}
+                    </div>
                   </div>
-                  <div className="c-title" style={{ fontSize: '12px', color: 'var(--text2)' }}>
-                    {contact.position || 'No Title'}
-                  </div>
+                  {onHideContact && (
+                    <HideButton contactName={contact.fullName} onHide={() => onHideContact(contact.contactId)} />
+                  )}
                 </div>
                 <div className="c-meta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div className="c-company" style={{ fontSize: '12px', color: 'var(--orange)', fontWeight: 500 }}>
@@ -148,7 +154,7 @@ export default function CategoriesTab({ contacts, onSelectContact }: { contacts:
                 </div>
                 <div style={{ marginTop: '12px', borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
                   <Link href={`/deepdive/new?contactId=${contact.contactId}`} style={{ display: 'block', textAlign: 'center', fontSize: '12px', color: 'var(--orange)', fontWeight: 600, textDecoration: 'none', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                    Deep Dive Analysis ⚡
+                    Deep Dive<span className="hide-mobile"> Analysis</span> ⚡
                   </Link>
                 </div>
               </div>

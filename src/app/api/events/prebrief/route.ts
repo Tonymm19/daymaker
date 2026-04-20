@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { DEFAULT_CLAUDE_MODEL } from '@/lib/constants';
+import { DEFAULT_CLAUDE_MODEL, FREE_EVENT_LIMIT } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,25 +60,43 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'User data corrupted' }, { status: 500 });
     }
 
-    // Free tier limit check
+    // Plan limit check. Free tier is 0 — Event Briefings are Pro-only.
     const now = new Date();
     const currentMonthString = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-    
+
     let currentMonthEvents = userDoc.currentMonthEvents || 0;
-    
-    // Reset if it's a new month
     if (userDoc.currentMonthString !== currentMonthString) {
       currentMonthEvents = 0;
     }
 
-    if (userDoc.plan === 'free' && currentMonthEvents >= 1) {
-      return NextResponse.json({ 
-        error: 'You have reached the free tier limit of 1 event briefing per month. Upgrade to Pro for unlimited briefings.' 
+    if (userDoc.plan === 'free' && currentMonthEvents >= FREE_EVENT_LIMIT) {
+      return NextResponse.json({
+        error: 'limit_reached',
+        message: 'Event Briefings require a Pro subscription. Upgrade to unlock.',
+        upgradeUrl: '/settings',
       }, { status: 429 });
     }
 
     // Target User North Star string
     const targetNorthStar = userDoc.northStar?.trim() || "Identify the most strategically valuable connections for a professional networking context.";
+    const currentGoal = (userDoc.currentGoal || '').trim();
+    const connectionTypeLabels: Record<string, string> = {
+      cofounder: 'a co-founder',
+      client: 'a client',
+      investor: 'an investor',
+      collaborator: 'a collaborator',
+      mentor: 'a mentor',
+      other: 'another helpful connection',
+    };
+    const seekingLabel = userDoc.connectionType
+      ? (connectionTypeLabels[userDoc.connectionType] || userDoc.connectionType)
+      : '';
+    const currentGoalBlock = currentGoal || seekingLabel
+      ? `\n        The user's current focus: ${[
+          currentGoal && `Current Goal — ${currentGoal}`,
+          seekingLabel && `Seeking — ${seekingLabel}`,
+        ].filter(Boolean).join('. ')}. Weight this short-horizon need heavily when scoring relevance.`
+      : '';
 
     // Reflections Match persona block (empty string if not connected) — adds
     // active themes, emerging interests, and expertise so attendee relevance
@@ -87,25 +105,30 @@ export async function POST(req: Request) {
     const rmBlock = buildRmContextBlockFromUser(userDoc);
 
     // 2. Fetch User's Contacts to Determine Network Anchors
+    const hiddenSet = new Set(userDoc.hiddenContacts || []);
     const contactsSnap = await userRef.collection('contacts').get();
-    const networkNames = new Set<string>();
+    const networkByName = new Map<string, { contactId: string; linkedInUrl: string }>();
     contactsSnap.forEach(doc => {
       const data = doc.data();
+      if (hiddenSet.has(data.contactId)) return;
+      const record = { contactId: data.contactId, linkedInUrl: data.linkedInUrl || '' };
       if (data.firstName && data.lastName) {
-        networkNames.add(`${data.firstName} ${data.lastName}`.toLowerCase());
+        networkByName.set(`${data.firstName} ${data.lastName}`.toLowerCase(), record);
       } else if (data.fullName) {
-        networkNames.add(data.fullName.toLowerCase());
+        networkByName.set(data.fullName.toLowerCase(), record);
       }
     });
 
     // Bucket attendees into mapped input objects
     const mappedAttendeesToProcess = attendees.map(att => {
-      const isAnchor = networkNames.has((att.name || '').toLowerCase().trim());
+      const match = networkByName.get((att.name || '').toLowerCase().trim());
       return {
         name: att.name || 'Unknown',
         company: att.company || 'Unknown',
         title: att.title || 'Unknown',
-        anchorStatus: isAnchor ? 'anchor' : 'new'
+        anchorStatus: match ? 'anchor' : 'new',
+        _contactId: match?.contactId,
+        _linkedInUrl: match?.linkedInUrl,
       };
     });
 
@@ -129,11 +152,14 @@ export async function POST(req: Request) {
     // Batching to prevent prompt overload (max 50 at a time)
     const BATCH_SIZE = 50;
     for (let i = 0; i < mappedAttendeesToProcess.length; i += BATCH_SIZE) {
-      const batch = mappedAttendeesToProcess.slice(i, i + BATCH_SIZE);
+      const batchFull = mappedAttendeesToProcess.slice(i, i + BATCH_SIZE);
+      // Strip private enrichment fields before sending to Claude — the model
+      // should only see what influences its scoring.
+      const batch = batchFull.map(({ _contactId, _linkedInUrl, ...rest }) => rest);
 
       const promptContext = `
         You are an elite networking strategist. The user is attending an event called "${eventName}" in "${eventLocation || 'an unspecified location'}".
-        The user's core strategic goal (North Star) is: "${targetNorthStar}"
+        The user's core strategic goal (North Star) is: "${targetNorthStar}"${currentGoalBlock}
 ${rmBlock}${descriptionBlock}${urlsBlock}
 
         Use the event description and any URLs above as context about the event's theme, audience, and likely conversations so your relevance scoring and conversation starters are grounded in that context.
@@ -184,6 +210,27 @@ ${rmBlock}${descriptionBlock}${urlsBlock}
         const textOutput = ('text' in message.content[0]) ? message.content[0].text : '';
         const cleanedStr = textOutput.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
         const parsedArr = JSON.parse(cleanedStr);
+
+        // Re-attach network enrichment (contactId, linkedInUrl) to each attendee
+        // by matching back to the input batch by name.
+        const enrichmentByName = new Map<string, { contactId?: string; linkedInUrl?: string }>();
+        for (const row of batchFull) {
+          enrichmentByName.set(row.name.toLowerCase().trim(), {
+            contactId: row._contactId,
+            linkedInUrl: row._linkedInUrl,
+          });
+        }
+        for (const att of parsedArr) {
+          const enrich = enrichmentByName.get((att.name || '').toLowerCase().trim());
+          if (enrich?.contactId) att.contactId = enrich.contactId;
+          if (enrich?.linkedInUrl) {
+            att.linkedInUrl = enrich.linkedInUrl;
+          } else if (att.name) {
+            // Fall back to a LinkedIn search URL so the "View LinkedIn Profile"
+            // button is always usable, even for non-network attendees.
+            att.linkedInUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(att.name + (att.company ? ' ' + att.company : ''))}`;
+          }
+        }
         generatedAttendees.push(...parsedArr);
       } catch (err: any) {
         console.error(`Claude Batch starting at index ${i} failed:`, err.message);

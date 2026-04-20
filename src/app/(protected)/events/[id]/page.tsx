@@ -115,7 +115,7 @@ export default function EventDetailPage() {
       {/* Tip if No North Star */}
       {!userDoc?.northStar && (
         <div style={{ background: 'var(--orange-dim)', border: '1px solid var(--orange)', borderRadius: '6px', padding: '16px', marginBottom: '24px', fontSize: '13px', color: 'var(--text)' }}>
-          <strong style={{ color: 'var(--orange)' }}>💡 Pro Tip:</strong> Set your <strong>North Star</strong> in your Settings to get more targeted recommendations instead of generalized networking tips.
+          <strong style={{ color: 'var(--orange)' }}>💡 Pro Tip:</strong> Set your <strong>North Star</strong> in your Profile to get more targeted recommendations instead of generalized networking tips.
         </div>
       )}
 
@@ -203,6 +203,11 @@ export default function EventDetailPage() {
                       <div style={{ fontSize: '13px', color: 'var(--text2)' }}>
                         {att.position} <span style={{ color: 'var(--orange)' }}>@ {att.company}</span>
                       </div>
+                      {!att.photoUrl && att.linkedInUrl && (
+                        <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '4px', fontStyle: 'italic' }}>
+                          Click to view their LinkedIn profile
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -225,7 +230,7 @@ export default function EventDetailPage() {
 
                 {/* Expanded Body */}
                 {isExpanded && (
-                  <div 
+                  <div
                     className="att-body"
                     style={{
                       padding: '24px 20px',
@@ -235,6 +240,63 @@ export default function EventDetailPage() {
                       gap: '24px'
                     }}
                   >
+                    {/* Action Row: LinkedIn + Deep Dive */}
+                    {(att.linkedInUrl || att.contactId) && (
+                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                        {att.linkedInUrl && (
+                          <a
+                            href={att.linkedInUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '8px 16px',
+                              background: '#0A66C2',
+                              color: '#ffffff',
+                              borderRadius: '999px',
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              textDecoration: 'none',
+                              transition: 'background 0.2s',
+                            }}
+                            onMouseOver={e => (e.currentTarget.style.background = '#0956a6')}
+                            onMouseOut={e => (e.currentTarget.style.background = '#0A66C2')}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.063 2.063 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                            </svg>
+                            View LinkedIn Profile
+                          </a>
+                        )}
+                        {att.contactId && (
+                          <a
+                            href={`/deepdive/new?contactId=${att.contactId}`}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '8px 16px',
+                              background: 'var(--orange)',
+                              color: '#0F0E0C',
+                              borderRadius: '999px',
+                              fontSize: '13px',
+                              fontWeight: 700,
+                              textDecoration: 'none',
+                              transition: 'filter 0.2s',
+                            }}
+                            onMouseOver={e => (e.currentTarget.style.filter = 'brightness(1.08)')}
+                            onMouseOut={e => (e.currentTarget.style.filter = 'brightness(1)')}
+                          >
+                            🔍 Deep Dive
+                          </a>
+                        )}
+                      </div>
+                    )}
+
                     {/* Why They Matter */}
                     <div>
                       <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>

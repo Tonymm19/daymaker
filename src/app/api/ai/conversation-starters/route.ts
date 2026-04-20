@@ -26,11 +26,13 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { contactName, company, position, northStar, contactId } = body as {
+    const { contactName, company, position, northStar, currentGoal, connectionType, contactId } = body as {
       contactName?: string;
       company?: string;
       position?: string;
       northStar?: string;
+      currentGoal?: string;
+      connectionType?: string;
       contactId?: string;
     };
 
@@ -51,6 +53,21 @@ export async function POST(request: Request) {
       console.warn('[ConversationStarters] Could not load RM context:', err);
     }
 
+    const connectionTypeLabels: Record<string, string> = {
+      cofounder: 'a co-founder',
+      client: 'a client',
+      investor: 'an investor',
+      collaborator: 'a collaborator',
+      mentor: 'a mentor',
+      other: 'another helpful connection',
+    };
+    const seekingLabel = connectionType ? (connectionTypeLabels[connectionType] || connectionType) : '';
+    const goalLines = [
+      `The user's overarching networking goal (North Star) is: ${northStar || 'Build meaningful professional connections.'}`,
+      currentGoal && currentGoal.trim() ? `The user's current goal is: ${currentGoal.trim()}` : '',
+      seekingLabel ? `The user is currently seeking: ${seekingLabel}` : '',
+    ].filter(Boolean).join('\n');
+
     const userPrompt = `Generate 3-4 short, highly personalized conversation starters for outreach to the target contact.
 Keep them extremely concise (1-2 sentences max each).
 Do NOT include greetings, just the opening hook.
@@ -59,9 +76,9 @@ Target Contact: ${contactName}
 Company: ${company || 'Unknown'}
 Position: ${position || 'Unknown'}
 
-The user's overarching networking goal (North Star) is: ${northStar || 'Build meaningful professional connections.'}
+${goalLines}
 ${rmBlock}
-Ensure the conversation starters align with the user's goal and lean on the user's tracking interests and active themes above (when provided) so the hooks sound like the user, not a template. Still match the target's role.
+Ensure the conversation starters align with the user's goals (weight the short-horizon Current Goal / Seeking preference heavily when present) and lean on the user's tracking interests and active themes above (when provided) so the hooks sound like the user, not a template. Still match the target's role.
 Format the output EXACTLY as a JSON array of strings. Do not wrap in markdown or add anything else to the response.
 Example: ["Hook 1", "Hook 2", "Hook 3"]`;
 

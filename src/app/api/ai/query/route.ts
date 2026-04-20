@@ -37,10 +37,14 @@ export async function POST(request: Request) {
     const currentMonth = new Date().toISOString().slice(0, 7); // e.g., '2026-04'
     
     let northStar = '';
+    let currentGoal = '';
+    let connectionType = '';
     let rmPersonaTraits: string[] = [];
     let displayName = 'User';
     let contactCount = 0;
     let rmContext: any = null;
+    let hiddenContacts: string[] = [];
+    let onboardingAnswers: any = null;
 
     // 1. Transactional Billing Check & Increment
     try {
@@ -53,9 +57,13 @@ export async function POST(request: Request) {
         const data = userSnap.data()!;
         const isFree = data.plan === 'free';
         northStar = data.northStar || '';
+        currentGoal = data.currentGoal || '';
+        connectionType = data.connectionType || '';
+        onboardingAnswers = data.onboardingAnswers || null;
         rmPersonaTraits = data.rmPersonaTraits || [];
         displayName = data.displayName || 'User';
         contactCount = data.contactCount || 0;
+        hiddenContacts = Array.isArray(data.hiddenContacts) ? data.hiddenContacts : [];
         rmContext = {
           rmConnected: !!data.rmConnected,
           rmPersonaTraits: data.rmPersonaTraits || [],
@@ -85,7 +93,11 @@ export async function POST(request: Request) {
       });
     } catch (err: any) {
       if (err.message === 'LIMIT_EXCEEDED') {
-        return NextResponse.json({ error: 'Monthly query limit exceeded on the Free plan. Please upgrade.' }, { status: 429 });
+        return NextResponse.json({
+          error: 'limit_reached',
+          message: `You've used your ${FREE_QUERY_LIMIT} free AI queries this month. Upgrade to Pro for unlimited queries.`,
+          upgradeUrl: '/settings',
+        }, { status: 429 });
       }
       throw err;
     }
@@ -111,6 +123,12 @@ export async function POST(request: Request) {
       contextData = snapshot.docs.map(doc => doc.data());
     }
 
+    // Drop any contacts the user has hidden from their Profile.
+    if (hiddenContacts.length > 0) {
+      const hiddenSet = new Set(hiddenContacts);
+      contextData = contextData.filter((c: any) => !hiddenSet.has(c?.contactId));
+    }
+
     // 3. Prompt Construction
     const systemPrompt = buildQuerySystemPrompt(
       displayName,
@@ -118,6 +136,9 @@ export async function POST(request: Request) {
       rmPersonaTraits,
       contextData,
       rmContext,
+      currentGoal,
+      connectionType,
+      onboardingAnswers,
     );
 
     // 4. Call Claude

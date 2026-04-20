@@ -12,12 +12,14 @@ interface ContactDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   northStar: string;
+  currentGoal?: string;
+  connectionType?: string;
   /** Called after starters are generated + saved. Parent uses this to update
    *  its contacts cache so subsequent opens show the saved starters instantly. */
   onStartersUpdated?: (contactId: string, starters: string[]) => void;
 }
 
-export default function ContactDetailModal({ contact, isOpen, onClose, northStar, onStartersUpdated }: ContactDetailModalProps) {
+export default function ContactDetailModal({ contact, isOpen, onClose, northStar, currentGoal, connectionType, onStartersUpdated }: ContactDetailModalProps) {
   const { user } = useAuth();
   // Starters freshly generated in this session (overrides any saved ones on
   // the contact document for the current modal view).
@@ -65,7 +67,9 @@ export default function ContactDetailModal({ contact, isOpen, onClose, northStar
           contactName: contact.fullName,
           company: contact.company,
           position: contact.position,
-          northStar
+          northStar,
+          currentGoal,
+          connectionType,
         })
       });
 
@@ -104,7 +108,9 @@ export default function ContactDetailModal({ contact, isOpen, onClose, northStar
           contactName: contact.fullName,
           company: contact.company,
           position: contact.position,
-          northStar
+          northStar,
+          currentGoal,
+          connectionType,
         })
       });
 
@@ -287,26 +293,54 @@ export default function ContactDetailModal({ contact, isOpen, onClose, northStar
                 <textarea
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
+                  rows={8}
                   style={{
                     width: '100%',
-                    minHeight: '120px',
+                    minHeight: '200px',
+                    maxHeight: '400px',
                     padding: '12px',
                     background: 'var(--surface)',
                     border: '1px solid var(--border)',
                     borderRadius: '8px',
                     color: 'var(--text)',
                     fontSize: '14px',
+                    lineHeight: 1.55,
                     fontFamily: 'inherit',
-                    resize: 'vertical'
+                    resize: 'vertical',
+                    overflowY: 'auto'
                   }}
                 />
-                <button 
-                  onClick={copyToClipboard}
-                  className="btn btn-secondary" 
-                  style={{ alignSelf: 'flex-start' }}
-                >
-                  Copy to Clipboard 📋
-                </button>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={copyToClipboard}
+                    className="btn btn-secondary"
+                  >
+                    Copy to Clipboard 📋
+                  </button>
+                  {contact?.linkedInUrl && (
+                    <a
+                      href={contact.linkedInUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        background: '#0A66C2',
+                        color: '#ffffff',
+                        border: '1px solid #0A66C2',
+                        textDecoration: 'none',
+                        fontWeight: 600,
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.063 2.063 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                      </svg>
+                      Send via LinkedIn
+                    </a>
+                  )}
+                </div>
               </>
             )}
           </div>
@@ -315,7 +349,7 @@ export default function ContactDetailModal({ contact, isOpen, onClose, northStar
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
           <Link href={`/deepdive/new?contactId=${contact.contactId}`} className="btn btn-primary" style={{ textDecoration: 'none', flex: 1, textAlign: 'center', boxSizing: 'border-box' }}>
-            Deep Dive Analysis ⚡
+            Deep Dive<span className="hide-mobile"> Analysis</span> ⚡
           </Link>
           {!isDrafting && (
             <button className="btn btn-secondary" style={{ flex: 1, boxSizing: 'border-box' }} onClick={handleDraftMessage}>

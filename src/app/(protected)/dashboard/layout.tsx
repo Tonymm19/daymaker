@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { BRAND } from '@/lib/brand.config';
 
 export const metadata: Metadata = {
-  title: `Dashboard | ${BRAND.name}`,
+  title: `Home | ${BRAND.name}`,
   description: `Your ${BRAND.name} network intelligence hub. Search, categorize, and query your contacts with AI.`,
 };
 

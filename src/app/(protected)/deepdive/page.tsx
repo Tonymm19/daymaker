@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/lib/firebase/AuthContext';
 import { getDb } from '@/lib/firebase/config';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
@@ -42,6 +42,21 @@ export default function DeepDiveIndex() {
     fetchDeepDives();
   }, [user]);
 
+  // Collapse history to one entry per targetContactId — the server always keeps
+  // the full chain (Regenerate Analysis creates new docs), but the UI should
+  // show the latest analysis per person.
+  const dedupedDeepDives = useMemo(() => {
+    const seen = new Set<string>();
+    const out: DeepDive[] = [];
+    for (const dd of pastDeepDives) {
+      const key = dd.targetContactId || dd.deepdiveId;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(dd);
+    }
+    return out;
+  }, [pastDeepDives]);
+
   const filteredContacts = contacts.filter(c => {
     if (!searchQuery) return true;
     const lowerQ = searchQuery.toLowerCase();
@@ -56,7 +71,7 @@ export default function DeepDiveIndex() {
           Deep Dive Analysis
         </h1>
         <p style={{ color: 'var(--text2)' }}>
-          Agent-to-Agent conversation identifying strategic synergy overlapping capabilities.
+          Strategic synergy analysis across your shared priorities and North Star.
         </p>
       </div>
 
@@ -66,7 +81,7 @@ export default function DeepDiveIndex() {
           <span>⚡</span> Start New Deep Dive
         </h3>
         <p style={{ color: 'var(--text2)', fontSize: '14px', marginBottom: '20px' }}>
-          Select a contact from your network. Our agent will analyze alignment against your North Star goals across a 4-round dynamic dialogue mapping opportunities.
+          Select a contact from your network. We&apos;ll analyze alignment with your North Star goals and surface the strongest strategic opportunities.
         </p>
         
         <div style={{ position: 'relative' }}>
@@ -139,7 +154,7 @@ export default function DeepDiveIndex() {
 
         {loadingHistory ? (
           <div style={{ color: 'var(--text2)' }}>Loading history...</div>
-        ) : pastDeepDives.length === 0 ? (
+        ) : dedupedDeepDives.length === 0 ? (
           <div
             className="card"
             style={{
@@ -154,12 +169,12 @@ export default function DeepDiveIndex() {
               Run your first Deep Dive analysis
             </div>
             <p style={{ color: 'var(--text2)', fontSize: '13px', maxWidth: '380px', margin: '0 auto', lineHeight: 1.6 }}>
-              Pick any contact above to start a 4-round agent-to-agent synergy analysis against your North Star.
+              Pick any contact above to start a synergy analysis against your North Star.
             </p>
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-            {pastDeepDives.map(dd => (
+            {dedupedDeepDives.map(dd => (
               <Link 
                 key={dd.deepdiveId}
                 href={`/deepdive/${dd.deepdiveId}`}

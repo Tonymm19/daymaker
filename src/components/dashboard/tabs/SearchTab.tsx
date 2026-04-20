@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Contact } from '@/lib/types';
 import Link from 'next/link';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
+import HideButton from '@/components/dashboard/HideButton';
 
 const PAGE_SIZE = 50;
 
@@ -14,6 +15,7 @@ interface SearchTabProps {
   /** Asks the parent to upgrade to a full contact load. Idempotent — fire freely. */
   onRequestFullLoad?: () => void;
   onSelectContact?: (c: Contact) => void;
+  onHideContact?: (contactId: string) => void;
 }
 
 export default function SearchTab({
@@ -22,6 +24,7 @@ export default function SearchTab({
   isLoadingFull = false,
   onRequestFullLoad,
   onSelectContact,
+  onHideContact,
 }: SearchTabProps) {
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query, 300);
@@ -101,20 +104,25 @@ export default function SearchTab({
         )}
       </div>
 
-      <div className="results-meta" style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--muted)' }}>
-        Showing {visibleContacts.length} of {filteredContacts.length} {filteredContacts.length === 1 ? 'result' : 'results'}
+      <div className="results-meta" style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--muted)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div>
+          {debouncedQuery ? (
+            <>
+              Showing {visibleContacts.length.toLocaleString()} {visibleContacts.length === 1 ? 'result' : 'results'} for &ldquo;{debouncedQuery}&rdquo;
+            </>
+          ) : (
+            <>Showing {visibleContacts.length.toLocaleString()} most recent connections</>
+          )}
+        </div>
         {isPartial && !debouncedQuery && (
-          <span style={{ marginLeft: '8px', color: 'var(--muted)' }}>
-            — 50 most recent.{' '}
-            <button
-              type="button"
-              onClick={() => onRequestFullLoad?.()}
-              disabled={isLoadingFull}
-              style={{ background: 'none', border: 'none', color: 'var(--orange)', cursor: 'pointer', padding: 0, fontSize: '13px', fontWeight: 600 }}
-            >
-              {isLoadingFull ? 'Loading full network...' : 'Load full network'}
-            </button>
-          </span>
+          <button
+            type="button"
+            onClick={() => onRequestFullLoad?.()}
+            disabled={isLoadingFull}
+            style={{ background: 'none', border: 'none', color: 'var(--orange)', cursor: 'pointer', padding: 0, fontSize: '13px', fontWeight: 600, alignSelf: 'flex-start' }}
+          >
+            {isLoadingFull ? 'Loading full network...' : 'Load full network →'}
+          </button>
         )}
       </div>
 
@@ -126,13 +134,18 @@ export default function SearchTab({
       }}>
         {visibleContacts.map(contact => (
           <div key={contact.contactId} className="c-card card" onClick={() => onSelectContact && onSelectContact(contact)} style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px', cursor: 'pointer' }}>
-            <div className="c-hdr">
-              <div className="c-name" style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text)' }}>
-                {contact.fullName}
+            <div className="c-hdr" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div className="c-name" style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text)' }}>
+                  {contact.fullName}
+                </div>
+                <div className="c-title" style={{ fontSize: '12px', color: 'var(--text2)' }}>
+                  {contact.position || 'No Title'}
+                </div>
               </div>
-              <div className="c-title" style={{ fontSize: '12px', color: 'var(--text2)' }}>
-                {contact.position || 'No Title'}
-              </div>
+              {onHideContact && (
+                <HideButton contactName={contact.fullName} onHide={() => onHideContact(contact.contactId)} />
+              )}
             </div>
 
             <div className="c-meta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -163,7 +176,7 @@ export default function SearchTab({
 
             <div style={{ marginTop: '12px', borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
               <Link href={`/deepdive/new?contactId=${contact.contactId}`} style={{ display: 'block', textAlign: 'center', fontSize: '12px', color: 'var(--orange)', fontWeight: 600, textDecoration: 'none', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                Deep Dive Analysis ⚡
+                Deep Dive<span className="hide-mobile"> Analysis</span> ⚡
               </Link>
             </div>
           </div>

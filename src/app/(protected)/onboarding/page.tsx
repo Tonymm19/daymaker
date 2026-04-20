@@ -153,7 +153,7 @@ export default function OnboardingPage() {
             </p>
 
             <button className="btn" onClick={() => router.push('/dashboard')} style={{ padding: '12px 32px' }}>
-              Go to Dashboard
+              Go to Home
             </button>
           </div>
         )}

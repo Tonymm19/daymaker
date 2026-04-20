@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/firebase/AuthContext';
 import { useUser } from '@/lib/hooks/useUser';
 import { useContacts } from '@/lib/hooks/useContacts';
@@ -10,7 +11,9 @@ import Avatar from '@/components/ui/Avatar';
 import { doc, updateDoc, deleteField } from 'firebase/firestore';
 import { getDb } from '@/lib/firebase/config';
 import { getAuth } from '@/lib/firebase/config';
+import { signOut } from 'firebase/auth';
 import type { DaymakerUser, RmActiveTheme, RmExpertiseArea } from '@/lib/types';
+import { FREE_QUERY_LIMIT, FREE_DEEPDIVE_LIMIT } from '@/lib/constants';
 
 const MAX_PHOTO_BYTES = 2 * 1024 * 1024; // 2MB
 const PHOTO_TARGET_PX = 200;
@@ -48,16 +51,34 @@ async function resizeImageToDataUrl(file: File, size: number): Promise<string> {
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const { userDoc, mutate, isLoading } = useUser();
   const { contacts, isLoading: contactsLoading } = useContacts();
   const [northStarInput, setNorthStarInput] = useState('');
   const [isSavingNS, setIsSavingNS] = useState(false);
+  const [currentGoalInput, setCurrentGoalInput] = useState('');
+  const [connectionTypeInput, setConnectionTypeInput] = useState('');
+  const [isSavingCG, setIsSavingCG] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState('');
+  const [hiddenBusy, setHiddenBusy] = useState<string | null>(null);
+
+  // Onboarding answers
+  const [ninetyDayGoalInput, setNinetyDayGoalInput] = useState('');
+  const [successfulConnectionInput, setSuccessfulConnectionInput] = useState('');
+  const [isSavingAnswers, setIsSavingAnswers] = useState(false);
+  const [answersSaved, setAnswersSaved] = useState(false);
+
+  // Account deletion
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -118,6 +139,24 @@ export default function SettingsPage() {
     }
   }, [userDoc, northStarInput, isSavingNS]);
 
+  // Hydrate current goal + connection type on first load.
+  const currentGoalHydrated = useRef(false);
+  useEffect(() => {
+    if (!userDoc || currentGoalHydrated.current) return;
+    currentGoalHydrated.current = true;
+    setCurrentGoalInput(userDoc.currentGoal || '');
+    setConnectionTypeInput(userDoc.connectionType || '');
+  }, [userDoc]);
+
+  // Hydrate onboarding answers once.
+  const answersHydrated = useRef(false);
+  useEffect(() => {
+    if (!userDoc || answersHydrated.current) return;
+    answersHydrated.current = true;
+    setNinetyDayGoalInput(userDoc.onboardingAnswers?.ninetyDayGoal || '');
+    setSuccessfulConnectionInput(userDoc.onboardingAnswers?.successfulConnection || '');
+  }, [userDoc]);
+
   // Sync the user doc's contactCount with the actual subcollection count.
   // The import pipeline writes this field, but it can drift after auth-driven
   // user-doc recreation or partial imports. One-time repair on Settings load.
@@ -149,6 +188,101 @@ export default function SettingsPage() {
       setErrorMsg(e.message || 'Failed to save North Star');
     } finally {
       setIsSavingNS(false);
+    }
+  };
+
+  const currentGoalDirty =
+    (userDoc?.currentGoal || '') !== currentGoalInput ||
+    (userDoc?.connectionType || '') !== connectionTypeInput;
+
+  const handleSaveCurrentGoal = async () => {
+    if (!user || !currentGoalDirty) return;
+    setIsSavingCG(true);
+    try {
+      const db = getDb();
+      if (db) {
+        await updateDoc(doc(db, 'users', user.uid), {
+          currentGoal: currentGoalInput,
+          connectionType: connectionTypeInput,
+          updatedAt: new Date(),
+        });
+        await mutate();
+      }
+    } catch (e: any) {
+      setErrorMsg(e.message || 'Failed to save Current Goal');
+    } finally {
+      setIsSavingCG(false);
+    }
+  };
+
+  const answersDirty =
+    (userDoc?.onboardingAnswers?.ninetyDayGoal || '') !== ninetyDayGoalInput ||
+    (userDoc?.onboardingAnswers?.successfulConnection || '') !== successfulConnectionInput;
+
+  const handleSaveAnswers = async () => {
+    if (!user || !answersDirty) return;
+    setIsSavingAnswers(true);
+    setAnswersSaved(false);
+    try {
+      const db = getDb();
+      if (db) {
+        await updateDoc(doc(db, 'users', user.uid), {
+          onboardingAnswers: {
+            ninetyDayGoal: ninetyDayGoalInput.trim(),
+            successfulConnection: successfulConnectionInput.trim(),
+          },
+          updatedAt: new Date(),
+        });
+        await mutate();
+        setAnswersSaved(true);
+        setTimeout(() => setAnswersSaved(false), 2500);
+      }
+    } catch (e: any) {
+      setErrorMsg(e.message || 'Failed to save answers');
+    } finally {
+      setIsSavingAnswers(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'DELETE') return;
+    setDeleteError('');
+    setIsDeleting(true);
+    try {
+      const auth = getAuth();
+      const token = await auth?.currentUser?.getIdToken();
+      if (!token) throw new Error('Not authenticated');
+      const res = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Deletion failed (HTTP ${res.status})`);
+      // Sign the user out client-side, then bounce to the landing page.
+      try { if (auth) await signOut(auth); } catch { /* ignore */ }
+      router.replace('/');
+    } catch (err: any) {
+      setDeleteError(err.message || 'Could not delete your account.');
+      setIsDeleting(false);
+    }
+  };
+
+  const handleUnhideContact = async (contactId: string) => {
+    if (!user) return;
+    setHiddenBusy(contactId);
+    try {
+      const db = getDb();
+      if (!db) throw new Error('Database not initialized');
+      const next = (userDoc?.hiddenContacts || []).filter((id) => id !== contactId);
+      await updateDoc(doc(db, 'users', user.uid), {
+        hiddenContacts: next,
+        updatedAt: new Date(),
+      });
+      await mutate();
+    } catch (e: any) {
+      setErrorMsg(e.message || 'Failed to unhide contact');
+    } finally {
+      setHiddenBusy(null);
     }
   };
 
@@ -211,7 +345,7 @@ export default function SettingsPage() {
     <>
       <div className="main" style={{ paddingBottom: '64px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '32px 0 24px 0', borderBottom: '1px solid var(--border)', marginBottom: '32px' }}>
-          <h1 style={{ fontSize: '28px', margin: 0, color: 'var(--text)' }}>Settings</h1>
+          <h1 style={{ fontSize: '28px', margin: 0, color: 'var(--text)' }}>Profile</h1>
         </div>
 
         {errorMsg && (
@@ -329,6 +463,139 @@ export default function SettingsPage() {
             </p>
           </div>
 
+          {/* Current Goal Section */}
+          <div className="card" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--text)' }}>Current Goal</h3>
+              <button
+                className="btn"
+                onClick={handleSaveCurrentGoal}
+                disabled={isSavingCG || !currentGoalDirty}
+                style={{ padding: '6px 16px', fontSize: '13px' }}
+              >
+                {isSavingCG ? 'Saving...' : 'Save Goal'}
+              </button>
+            </div>
+            <textarea
+              value={currentGoalInput}
+              onChange={(e) => setCurrentGoalInput(e.target.value)}
+              placeholder="What are you working toward right now that the right introduction could accelerate?"
+              style={{
+                width: '100%', minHeight: '100px', padding: '16px', background: 'var(--darker)',
+                border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px',
+                resize: 'vertical', fontFamily: 'inherit', outline: 'none',
+              }}
+            />
+
+            <div style={{ marginTop: '20px' }}>
+              <div style={{ fontSize: '13px', color: 'var(--text)', fontWeight: 600, marginBottom: '10px' }}>
+                What kind of connection would help most?
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {[
+                  { value: 'cofounder', label: 'A co-founder' },
+                  { value: 'client', label: 'A client' },
+                  { value: 'investor', label: 'An investor' },
+                  { value: 'collaborator', label: 'A collaborator' },
+                  { value: 'mentor', label: 'A mentor' },
+                  { value: 'other', label: 'Something else' },
+                ].map((opt) => {
+                  const active = connectionTypeInput === opt.value;
+                  return (
+                    <label
+                      key={opt.value}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 12px',
+                        borderRadius: '16px',
+                        border: `1px solid ${active ? 'var(--orange)' : 'var(--border)'}`,
+                        background: active ? 'var(--orange-dim)' : 'transparent',
+                        color: active ? 'var(--orange)' : 'var(--text2)',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="connectionType"
+                        value={opt.value}
+                        checked={active}
+                        onChange={() => setConnectionTypeInput(opt.value)}
+                        style={{ margin: 0 }}
+                      />
+                      {opt.label}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <p style={{ margin: '16px 0 0 0', fontSize: '12px', color: 'var(--muted)' }}>
+              Used alongside your North Star to personalize query results, deep dives, conversation starters, and event briefings.
+            </p>
+          </div>
+
+          {/* Help Us Know You Better */}
+          <div className="card" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--text)' }}>Help Us Know You Better</h3>
+              {answersSaved && (
+                <span style={{ fontSize: '12px', color: 'var(--green)', fontWeight: 600 }}>Saved ✓</span>
+              )}
+            </div>
+            <p style={{ margin: '4px 0 20px 0', fontSize: '13px', color: 'var(--muted)' }}>
+              Short answers that make every AI recommendation feel more like you.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', color: 'var(--text)', fontWeight: 600, marginBottom: '8px' }}>
+                  What&apos;s the one thing you&apos;re trying to make happen in the next 90 days, and who would need to be in the room for it to move?
+                </label>
+                <textarea
+                  value={ninetyDayGoalInput}
+                  onChange={(e) => setNinetyDayGoalInput(e.target.value)}
+                  rows={2}
+                  placeholder="e.g. Close our seed round — need 2 more lead-investor introductions in fintech."
+                  style={{
+                    width: '100%', padding: '12px', background: 'var(--darker)',
+                    border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px',
+                    resize: 'vertical', fontFamily: 'inherit', outline: 'none', fontSize: '14px',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', color: 'var(--text)', fontWeight: 600, marginBottom: '8px' }}>
+                  What does a successful connection look like for you this month?
+                </label>
+                <textarea
+                  value={successfulConnectionInput}
+                  onChange={(e) => setSuccessfulConnectionInput(e.target.value)}
+                  rows={2}
+                  placeholder="e.g. A 20-minute call with a founder who has shipped a B2B product to Fortune-500 procurement."
+                  style={{
+                    width: '100%', padding: '12px', background: 'var(--darker)',
+                    border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px',
+                    resize: 'vertical', fontFamily: 'inherit', outline: 'none', fontSize: '14px',
+                  }}
+                />
+              </div>
+
+              <button
+                className="btn"
+                onClick={handleSaveAnswers}
+                disabled={isSavingAnswers || !answersDirty}
+                style={{ padding: '8px 16px', fontSize: '13px', alignSelf: 'flex-start' }}
+              >
+                {isSavingAnswers ? 'Saving...' : 'Save Answers'}
+              </button>
+            </div>
+          </div>
+
           {/* Plan & Billing */}
           <div className="card" style={{ padding: '24px' }}>
             <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', color: 'var(--text)' }}>Plan & Billing</h3>
@@ -338,7 +605,7 @@ export default function SettingsPage() {
                   {userDoc?.plan || 'Free'} Plan
                 </div>
                 <div style={{ fontSize: '13px', color: 'var(--muted)', marginTop: '4px' }}>
-                  {isPro ? 'Unlimited queries & full network access.' : '10 AI Queries per month limit.'}
+                  {isPro ? 'Unlimited queries, Deep Dives, and event briefings.' : '3 AI queries, 1 Deep Dive, 0 event briefings per month.'}
                 </div>
               </div>
               <div>
@@ -354,6 +621,9 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+
+          {/* Usage This Month */}
+          <UsageThisMonthCard userDoc={userDoc} />
 
           {/* Data Section */}
           <div className="card" style={{ padding: '24px' }}>
@@ -383,6 +653,103 @@ export default function SettingsPage() {
 
           <ReflectionsMatchCard userDoc={userDoc} onUpdated={mutate} />
 
+          {/* Hidden Contacts */}
+          <div className="card" style={{ padding: '24px' }}>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', color: 'var(--text)' }}>Hidden Contacts</h3>
+            <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: 'var(--muted)' }}>
+              Contacts you&apos;ve hidden from search, categories, companies, AI queries, and event briefings.
+            </p>
+            {(() => {
+              const hiddenIds = userDoc?.hiddenContacts || [];
+              if (hiddenIds.length === 0) {
+                return (
+                  <div style={{ fontSize: '13px', color: 'var(--text2)' }}>
+                    You haven&apos;t hidden anyone. Use the hide icon on a contact card to filter them out of all views.
+                  </div>
+                );
+              }
+              const byId = new Map(contacts.map((c) => [c.contactId, c]));
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {hiddenIds.map((cid) => {
+                    const c = byId.get(cid);
+                    return (
+                      <div
+                        key={cid}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '10px 14px',
+                          background: 'var(--darker)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '8px',
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '14px', color: 'var(--text)', fontWeight: 600 }}>
+                            {c?.fullName || 'Unknown contact'}
+                          </div>
+                          {c && (
+                            <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
+                              {c.position || 'No title'}
+                              {c.company ? ` · ${c.company}` : ''}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleUnhideContact(cid)}
+                          disabled={hiddenBusy === cid}
+                          className="btn"
+                          style={{ padding: '6px 14px', fontSize: '12px', background: 'var(--dark)', color: 'var(--text)', border: '1px solid var(--border)' }}
+                        >
+                          {hiddenBusy === cid ? 'Unhiding...' : 'Unhide'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Danger Zone — Delete Account */}
+          <div
+            className="card"
+            style={{
+              padding: '24px',
+              border: '1px solid var(--red)',
+              background: 'rgba(239, 68, 68, 0.04)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--red)' }}>Delete My Account</h3>
+            </div>
+            <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: 'var(--text2)', lineHeight: 1.5 }}>
+              Permanently deletes your account and everything tied to it — contacts, Deep Dives,
+              event briefings, and saved settings. This cannot be undone.
+            </p>
+            <button
+              onClick={() => { setShowDeleteModal(true); setDeleteConfirmText(''); setDeleteError(''); }}
+              className="btn"
+              style={{
+                padding: '8px 16px',
+                fontSize: '13px',
+                background: 'transparent',
+                color: 'var(--red)',
+                border: '1px solid var(--red)',
+                fontWeight: 600,
+              }}
+            >
+              Delete My Account
+            </button>
+          </div>
 
         </div>
       </div>
@@ -390,7 +757,143 @@ export default function SettingsPage() {
       <Modal isOpen={showUpload} onClose={() => setShowUpload(false)} title="Upload LinkedIn Connections">
         <CsvUpload onComplete={() => { mutate(); setTimeout(() => setShowUpload(false), 3000); }} />
       </Modal>
+
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => { if (!isDeleting) setShowDeleteModal(false); }}
+        title="Delete your account?"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <p style={{ margin: 0, fontSize: '14px', color: 'var(--text)', lineHeight: 1.6 }}>
+            This will permanently delete your account and all associated data including contacts,
+            Deep Dives, event briefings, and saved settings. This action cannot be undone.
+          </p>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', color: 'var(--text2)', marginBottom: '8px' }}>
+              Type <strong style={{ color: 'var(--red)', fontFamily: "'JetBrains Mono', monospace" }}>DELETE</strong> to confirm:
+            </label>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="DELETE"
+              disabled={isDeleting}
+              autoFocus
+              style={{
+                width: '100%', padding: '12px', background: 'var(--darker)',
+                border: `1px solid ${deleteConfirmText === 'DELETE' ? 'var(--red)' : 'var(--border)'}`,
+                color: 'var(--text)', borderRadius: '6px',
+                fontFamily: "'JetBrains Mono', monospace", fontSize: '14px', outline: 'none',
+              }}
+            />
+          </div>
+
+          {deleteError && (
+            <div style={{ padding: '10px 14px', background: 'var(--red-dim)', color: 'var(--red)', borderRadius: '6px', fontSize: '13px' }}>
+              {deleteError}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              onClick={() => setShowDeleteModal(false)}
+              disabled={isDeleting}
+              className="btn"
+              style={{ padding: '8px 16px', fontSize: '13px', background: 'var(--dark)', color: 'var(--text)', border: '1px solid var(--border)' }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteAccount}
+              disabled={deleteConfirmText !== 'DELETE' || isDeleting}
+              className="btn"
+              style={{
+                padding: '8px 16px', fontSize: '13px', background: 'var(--red)', color: '#fff',
+                border: '1px solid var(--red)', fontWeight: 600,
+                opacity: (deleteConfirmText !== 'DELETE' || isDeleting) ? 0.5 : 1,
+                cursor: (deleteConfirmText !== 'DELETE' || isDeleting) ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {isDeleting ? 'Deleting...' : 'Delete My Account'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </>
+  );
+}
+
+// ============================================================================
+// Usage This Month card
+// ============================================================================
+
+function UsageThisMonthCard({ userDoc }: { userDoc: DaymakerUser | null | undefined }) {
+  if (!userDoc) return null;
+  const isPro = userDoc.plan === 'pro';
+
+  // Month rollover is written on each usage event, but if the user hasn't
+  // triggered anything yet this calendar month their counters still point at
+  // last month. Clamp displayed counts to zero in that case.
+  const now = new Date();
+  const currentMonthStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+  const sameMonth = userDoc.currentMonthString === currentMonthStr;
+  const queries = sameMonth ? (userDoc.currentMonthQueries || 0) : 0;
+  const deepDives = sameMonth ? (userDoc.currentMonthDeepDives || 0) : 0;
+  const events = sameMonth ? (userDoc.currentMonthEvents || 0) : 0;
+
+  const Row = ({ label, body, highlight }: { label: string; body: React.ReactNode; highlight?: boolean }) => (
+    <div style={{
+      padding: '14px 16px',
+      background: 'var(--darker)',
+      border: `1px solid ${highlight ? 'var(--orange)' : 'var(--border)'}`,
+      borderRadius: '8px',
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px',
+    }}>
+      <div style={{ fontSize: '13px', color: 'var(--text2)' }}>{label}</div>
+      <div style={{ fontSize: '14px', color: 'var(--text)', fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>
+        {body}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="card" style={{ padding: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+        <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--text)' }}>Usage This Month</h3>
+        <span style={{
+          fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase',
+          padding: '3px 10px', borderRadius: '10px',
+          background: isPro ? 'var(--orange-dim)' : 'var(--surface2)',
+          color: isPro ? 'var(--orange)' : 'var(--text2)',
+        }}>
+          {isPro ? 'Pro' : 'Free'}
+        </span>
+      </div>
+      <p style={{ margin: '4px 0 16px 0', fontSize: '12px', color: 'var(--muted)' }}>
+        Resets on the first of each month. {isPro ? 'All features unlimited on Pro.' : `Upgrade for unlimited access.`}
+      </p>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <Row
+          label="AI Queries"
+          highlight={!isPro && queries >= FREE_QUERY_LIMIT}
+          body={isPro ? `${queries} used` : `${queries} / ${FREE_QUERY_LIMIT} used`}
+        />
+        <Row
+          label="Deep Dives"
+          highlight={!isPro && deepDives >= FREE_DEEPDIVE_LIMIT}
+          body={isPro ? `${deepDives} generated` : `${deepDives} / ${FREE_DEEPDIVE_LIMIT} used`}
+        />
+        <Row
+          label="Event Briefings"
+          highlight={!isPro}
+          body={isPro ? `${events} generated` : 'Pro only'}
+        />
+      </div>
+    </div>
   );
 }
 

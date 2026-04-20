@@ -760,6 +760,70 @@ body {
   .dash-content-area .tab-pane {
     padding: 16px 0 !important;
   }
+  /* Force contact/company grids to a single column on mobile. The desktop
+     auto-fill/minmax keeps 1 col at 375px viewports naturally, but adding an
+     explicit rule guards against future minmax tweaks and sub-500px tablets. */
+  .d-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  /* Category pills should wrap cleanly even when a category name is long. */
+  .c-tags {
+    gap: 6px !important;
+  }
+  .c-tag {
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+  /* The full card is already the tap target via onClick, but give cards
+     visible press feedback on touch. */
+  .c-card {
+    transition: background 0.1s ease;
+  }
+  .c-card:active {
+    background: var(--surface2) !important;
+  }
+}
+
+/* Utility: show content on desktop only. Lets us hide secondary label words
+   like "Analysis" in "Deep Dive Analysis" on phones. */
+@media (max-width: 767px) {
+  .hide-mobile {
+    display: none !important;
+  }
+}
+
+/* =============================================
+   SKELETON LOADERS — pulse animation for first-paint
+   ============================================= */
+@keyframes skeleton-pulse {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--surface) 0%, var(--surface2) 50%, var(--surface) 100%);
+  background-size: 200% 100%;
+  border-radius: 8px;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+.skeleton-hero {
+  height: 180px;
+  margin-bottom: 24px;
+}
+.skeleton-stat {
+  height: 72px;
+}
+.skeleton-line {
+  height: 14px;
+  margin-bottom: 8px;
+}
+.skeleton-line.short {
+  width: 40%;
+}
+.skeleton-line.medium {
+  width: 70%;
 }
 
 /* =============================================

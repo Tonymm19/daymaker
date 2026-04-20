@@ -4,6 +4,7 @@ import type { Contact, DeepDive, DaymakerUser } from '@/lib/types';
 import { randomUUID } from 'crypto';
 import { callClaude, extractJson } from '@/lib/ai/claude';
 import { buildRmContextBlockFromUser } from '@/lib/ai/rm-context';
+import { FREE_DEEPDIVE_LIMIT } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +37,40 @@ export async function POST(req: Request) {
     }
     const userDoc = userSnap.data() as DaymakerUser;
 
+    // 1a. Plan limit check + increment (transactional so we can't double-charge
+    //     a racing caller on the free tier).
+    const userRef = adminDb.collection('users').doc(userId);
+    const nowForLimit = new Date();
+    const currentMonthStr = `${nowForLimit.getFullYear()}-${(nowForLimit.getMonth() + 1).toString().padStart(2, '0')}`;
+    try {
+      await adminDb.runTransaction(async (t) => {
+        const snap = await t.get(userRef);
+        if (!snap.exists) throw new Error('User not found');
+        const data = snap.data()!;
+        const isFree = data.plan === 'free';
+        const storedMonth = data.currentMonthString || '';
+        let count = storedMonth === currentMonthStr ? (data.currentMonthDeepDives || 0) : 0;
+        if (isFree && count >= FREE_DEEPDIVE_LIMIT) {
+          throw new Error('LIMIT_EXCEEDED');
+        }
+        count += 1;
+        t.update(userRef, {
+          currentMonthDeepDives: count,
+          currentMonthString: currentMonthStr,
+          updatedAt: new Date(),
+        });
+      });
+    } catch (err: any) {
+      if (err.message === 'LIMIT_EXCEEDED') {
+        return NextResponse.json({
+          error: 'limit_reached',
+          message: `You've used your ${FREE_DEEPDIVE_LIMIT} free Deep Dive this month. Upgrade to Pro for unlimited Deep Dives.`,
+          upgradeUrl: '/settings',
+        }, { status: 429 });
+      }
+      throw err;
+    }
+
     // 2. Load Target Contact
     const targetSnap = await adminDb.collection('users').doc(userId).collection('contacts').doc(targetContactId).get();
     if (!targetSnap.exists) {
@@ -47,7 +82,14 @@ export async function POST(req: Request) {
     // Use the target's company and position as the anchor point
     const contextQuery = `People working in ${targetContact.company || ''} as ${targetContact.position || ''} or related industries.`;
     const queryEmbedding = await embedQuery(contextQuery);
-    const searchResultContacts = await retrieveRelevant(adminDb as any, userId, queryEmbedding, 20);
+    let searchResultContacts = await retrieveRelevant(adminDb as any, userId, queryEmbedding, 20);
+
+    // Drop hidden contacts from overlap candidates. Hidden contacts should not
+    // show up as "Contacts at Similar Companies" in Deep Dive context either.
+    const hiddenSet = new Set(userDoc.hiddenContacts || []);
+    if (hiddenSet.size > 0) {
+      searchResultContacts = searchResultContacts.filter((c: any) => !hiddenSet.has(c?.contactId));
+    }
     
     // Evaluate Overlaps (naive string check for shared companies if data lacks exact IDs)
     const matchingCompaniesContext = searchResultContacts.filter(
@@ -58,11 +100,56 @@ export async function POST(req: Request) {
 
     // Build Context strings
     let targetContext = `Name: ${targetContact.fullName}\nCompany: ${targetContact.company || 'Unknown'}\nPosition: ${targetContact.position || 'Unknown'}`;
+
+    // Surface the connection recency so the model can weight stale, long-dormant
+    // connections lower in the synergy score.
+    const connectedOnRaw: any = targetContact.connectedOn;
+    let connectedOnDate: Date | null = null;
+    if (connectedOnRaw) {
+      if (typeof connectedOnRaw.toDate === 'function') connectedOnDate = connectedOnRaw.toDate();
+      else if (typeof connectedOnRaw.seconds === 'number') connectedOnDate = new Date(connectedOnRaw.seconds * 1000);
+      else {
+        const d = new Date(connectedOnRaw);
+        if (!isNaN(d.getTime())) connectedOnDate = d;
+      }
+    }
+    if (connectedOnDate) {
+      const iso = connectedOnDate.toISOString().slice(0, 10);
+      const yearsAgo = ((Date.now() - connectedOnDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000)).toFixed(1);
+      targetContext += `\nConnected On: ${iso} (${yearsAgo} years ago)`;
+    } else {
+      targetContext += `\nConnected On: Unknown`;
+    }
+
+    if (targetContact.previousCompany && targetContact.previousCompany !== targetContact.company) {
+      targetContext += `\nPrevious Company: ${targetContact.previousCompany}`;
+    }
+
     if (targetContact.categories && targetContact.categories.length > 0) {
       targetContext += `\nCategories: ${targetContact.categories.join(', ')}`;
     }
 
     let userContext = `Name: ${userDoc.displayName}\nNorth Star: ${userDoc.northStar || 'General networking and growth'}\n`;
+    if (userDoc.currentGoal && userDoc.currentGoal.trim()) {
+      userContext += `Current Goal: ${userDoc.currentGoal.trim()}\n`;
+    }
+    if (userDoc.connectionType) {
+      const label: Record<string, string> = {
+        cofounder: 'a co-founder',
+        client: 'a client',
+        investor: 'an investor',
+        collaborator: 'a collaborator',
+        mentor: 'a mentor',
+        other: 'another helpful connection',
+      };
+      userContext += `Seeking: ${label[userDoc.connectionType] || userDoc.connectionType}\n`;
+    }
+    if (userDoc.onboardingAnswers?.ninetyDayGoal?.trim()) {
+      userContext += `90-Day Goal & Who Needs to Be in the Room: ${userDoc.onboardingAnswers.ninetyDayGoal.trim()}\n`;
+    }
+    if (userDoc.onboardingAnswers?.successfulConnection?.trim()) {
+      userContext += `What a Successful Connection Looks Like This Month: ${userDoc.onboardingAnswers.successfulConnection.trim()}\n`;
+    }
     if (userDoc.rmPersonaTraits && userDoc.rmPersonaTraits.length > 0) {
       userContext += `Network Identity: ${userDoc.rmPersonaTraits.join(', ')}\n`;
     }
@@ -91,6 +178,19 @@ Execute the following 4-Round sequence:
 - Round 2: Network Overlap Scan (Identify overlapping industries/companies using provided overlap data; treat these as the user's contacts at similar companies, not verified mutuals)
 - Round 3: Synergy Identification (Identify 3-5 concrete synergy areas, valuing both sides)
 - Round 4: Action Recommendations (Specific steps for both parties)
+
+SCORING TRANSPARENCY:
+When assigning the synergyScore, explain the specific factors that drove the score. Weigh these dimensions explicitly:
+1. Relevance to the user's North Star AND Current Goal — does the target advance either? The Current Goal / Seeking preference (if provided) should carry at least as much weight as the North Star.
+2. Seniority / influence level — how much decision-making power does the target appear to have?
+3. Industry overlap — do their domains intersect with the user's work or network?
+4. Recency of the connection — use the Connected On date provided. Recent (≤2 years) is stronger signal than old (>5 years).
+5. Current vs outdated position — does the position look up-to-date?
+
+The executiveSummary MUST briefly name the factors that pushed the score up or down (e.g. "Score reduced by stale 7-year-old connection and generic title; lifted by strong North Star alignment.").
+
+DATA FRESHNESS:
+If the target's LinkedIn data appears outdated — no previousCompany change captured, connected many years ago (>5y) with a junior or generic title, or a position that reads as a past role — factor this into a LOWER score and call it out in the executiveSummary and Round 1 User Agent message. Include the Connected On date in your analysis context when discussing recency.
 
 Return your output EXCLUSIVELY in the exact JSON format specified below. Do not wrap in markdown tags like \`\`\`json. Valid JSON only.
 
