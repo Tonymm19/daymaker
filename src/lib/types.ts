@@ -58,6 +58,15 @@ export interface DaymakerUser {
   /** contactIds the user has chosen to hide from all list views, AI results,
    *  and event attendee matching. Filtered in both the client and the server. */
   hiddenContacts?: string[];
+  /** Calendar events and series the user has hidden from the upcoming events
+   *  list. `instanceIds` suppress a single occurrence (e.g. one instance of a
+   *  recurring meeting); `seriesIds` suppress an entire recurring series.
+   *  Composite keys are `{source}:{id}` to avoid collisions between Google
+   *  and Microsoft event IDs. Filtered client-side on fetch. */
+  hiddenCalendarEvents?: {
+    instanceIds?: string[];
+    seriesIds?: string[];
+  };
   rmConnected: boolean;
   rmPersonaTraits: string[];
   /** Reflections Match Bearer token. Server-side only — never returned in

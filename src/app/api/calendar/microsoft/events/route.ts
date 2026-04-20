@@ -31,6 +31,9 @@ interface MSGraphEvent {
   }[];
   isAllDay: boolean;
   webLink: string;
+  /** For expanded instances of recurring events, MS Graph returns the ID of
+   *  the series master in `seriesMasterId`. Null for standalone events. */
+  seriesMasterId?: string | null;
 }
 
 interface CalendarEvent {
@@ -44,6 +47,8 @@ interface CalendarEvent {
   isAllDay: boolean;
   htmlLink: string;
   source: 'microsoft';
+  /** Series master ID for recurring events. Null for one-offs. */
+  seriesId: string | null;
 }
 
 async function refreshMicrosoftToken(
@@ -163,7 +168,7 @@ export async function GET(req: NextRequest) {
     calendarViewUrl.searchParams.set('$orderby', 'start/dateTime');
     calendarViewUrl.searchParams.set(
       '$select',
-      'id,subject,bodyPreview,start,end,location,attendees,isAllDay,webLink'
+      'id,subject,bodyPreview,start,end,location,attendees,isAllDay,webLink,seriesMasterId'
     );
 
     const graphResponse = await fetch(calendarViewUrl.toString(), {
@@ -215,6 +220,7 @@ export async function GET(req: NextRequest) {
       isAllDay: event.isAllDay || false,
       htmlLink: event.webLink || '',
       source: 'microsoft' as const,
+      seriesId: event.seriesMasterId || null,
     }));
 
     return NextResponse.json({

@@ -35,6 +35,10 @@ interface CalendarEvent {
   attendees: { name: string; email: string; responseStatus: string }[];
   isAllDay: boolean;
   htmlLink: string;
+  /** For recurring events, the ID of the series master. Google exposes this as
+   *  `recurringEventId` on each expanded instance. Used to collapse repeating
+   *  events into a single row and to hide entire series at once. */
+  seriesId: string | null;
 }
 
 export async function GET(req: NextRequest) {
@@ -136,6 +140,7 @@ export async function GET(req: NextRequest) {
         })),
         isAllDay,
         htmlLink: event.htmlLink || '',
+        seriesId: event.recurringEventId || null,
       };
     });
 

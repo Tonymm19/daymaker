@@ -13,11 +13,12 @@
  * - Manual event creation with attendee text/CSV input
  */
 
-import { useState, useRef, FormEvent, useEffect, useCallback } from 'react';
+import { useState, useRef, FormEvent, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/firebase/AuthContext';
+import { useUser } from '@/lib/hooks/useUser';
 import { getDb } from '@/lib/firebase/config';
-import { collection, query, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { getAuth } from '@/lib/firebase/config';
 import Modal from '@/components/ui/Modal';
 import Papa from 'papaparse';
@@ -35,6 +36,17 @@ interface CalendarEvent {
   isAllDay: boolean;
   htmlLink: string;
   source: 'google' | 'microsoft';
+  /** For recurring events, the ID of the series master. Null for one-offs. */
+  seriesId?: string | null;
+}
+
+/** A CalendarEvent after collapse — if the raw feed had multiple instances of
+ *  the same recurring series, they're folded into one row here. `occurrences`
+ *  is the full list of underlying instances (sorted ascending by startTime);
+ *  the top-level fields mirror the next/earliest occurrence for display. */
+interface CollapsedCalendarEvent extends CalendarEvent {
+  occurrences: CalendarEvent[];
+  isRecurring: boolean;
 }
 
 interface DetectedUrls {
@@ -73,6 +85,54 @@ const BRIEFING_PHASE_LABELS = [
   'Cross-referencing with your network...',
   'Generating conversation starters...',
 ];
+
+// ─── Recurring Event Collapse ──────────────────────────────────────
+// Google and Microsoft both expand recurring events into individual instances
+// in their feeds, which clutters the upcoming events list (e.g. showing a
+// weekly team meeting 4 times in a month). This folds instances back into
+// one row per series. Grouping key preference:
+//   1. seriesId (server-provided recurringEventId / seriesMasterId)
+//   2. fallback: title + source + location — catches cases where the
+//      provider didn't give us a seriesId but the rows are obviously the
+//      same meeting
+// The surviving row represents the next (earliest) occurrence; all instances
+// are kept on `occurrences` so hide-one-instance can target the right row.
+function collapseRecurring(events: CalendarEvent[]): CollapsedCalendarEvent[] {
+  const groups = new Map<string, CalendarEvent[]>();
+
+  for (const ev of events) {
+    const key = ev.seriesId
+      ? `${ev.source}:series:${ev.seriesId}`
+      : `${ev.source}:title:${ev.title.trim().toLowerCase()}|${(ev.location || '').trim().toLowerCase()}`;
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(ev);
+    else groups.set(key, [ev]);
+  }
+
+  const collapsed: CollapsedCalendarEvent[] = [];
+  for (const bucket of groups.values()) {
+    // Title-based fallback is intentionally lenient — but don't collapse
+    // rows unless there's an actual series hint OR there are 2+ matches.
+    // A single one-off event with no seriesId should remain uncollapsed.
+    bucket.sort((a, b) => a.startTime.localeCompare(b.startTime));
+    const first = bucket[0];
+    const isRecurring = bucket.length > 1 || Boolean(first.seriesId);
+    collapsed.push({
+      ...first,
+      occurrences: bucket,
+      isRecurring,
+    });
+  }
+
+  collapsed.sort((a, b) => a.startTime.localeCompare(b.startTime));
+  return collapsed;
+}
+
+// Composite key so Google event id "abc123" can't accidentally suppress a
+// Microsoft event with the same id.
+function hideKey(source: 'google' | 'microsoft', id: string): string {
+  return `${source}:${id}`;
+}
 
 // ─── URL Detection ─────────────────────────────────────────────────
 function detectEventUrls(text: string | null): DetectedUrls {
@@ -165,8 +225,17 @@ export default function EventsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const { userDoc, mutate: mutateUser } = useUser();
   const [events, setEvents] = useState<EventBriefing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Hide-related state. When the user clicks the X on a recurring event we
+  // show a small chooser modal (hide this instance vs hide the series);
+  // one-off events hide immediately. `hiddenInstances` and `hiddenSeries`
+  // are Sets derived from the user doc for O(1) filter lookups.
+  const [hideTarget, setHideTarget] = useState<CollapsedCalendarEvent | null>(null);
+  const [hiding, setHiding] = useState(false);
+  const [showHiddenPanel, setShowHiddenPanel] = useState(false);
 
   // Calendar connection state
   const [googleConnected, setGoogleConnected] = useState(false);
@@ -216,6 +285,135 @@ export default function EventsPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const anyCalendarConnected = googleConnected || microsoftConnected;
+
+  // ─── Hide filters ────────────────────────────────────────────────
+  // Derived once per render from the user doc. Sets give O(1) lookups when
+  // filtering potentially dozens of calendar events.
+  const hiddenInstances = useMemo(
+    () => new Set(userDoc?.hiddenCalendarEvents?.instanceIds || []),
+    [userDoc?.hiddenCalendarEvents?.instanceIds]
+  );
+  const hiddenSeries = useMemo(
+    () => new Set(userDoc?.hiddenCalendarEvents?.seriesIds || []),
+    [userDoc?.hiddenCalendarEvents?.seriesIds]
+  );
+
+  // The upcoming events list the user actually sees: calendar feed, minus
+  // hidden individual instances, minus hidden whole series, then collapsed
+  // so recurring meetings show as a single row.
+  const visibleEvents = useMemo(() => {
+    const kept = calendarEvents.filter((ev) => {
+      if (hiddenInstances.has(hideKey(ev.source, ev.id))) return false;
+      if (ev.seriesId && hiddenSeries.has(hideKey(ev.source, ev.seriesId))) return false;
+      return true;
+    });
+    return collapseRecurring(kept);
+  }, [calendarEvents, hiddenInstances, hiddenSeries]);
+
+  // Events the user has hidden, reconstructed from the raw feed for the
+  // "Hidden events" management panel. These keep their original composite
+  // hide keys so the Unhide button can remove the exact match.
+  const hiddenEventsList = useMemo(() => {
+    return calendarEvents
+      .filter((ev) => {
+        if (hiddenInstances.has(hideKey(ev.source, ev.id))) return true;
+        if (ev.seriesId && hiddenSeries.has(hideKey(ev.source, ev.seriesId))) return true;
+        return false;
+      })
+      .map((ev) => {
+        const isSeriesHide = Boolean(
+          ev.seriesId && hiddenSeries.has(hideKey(ev.source, ev.seriesId))
+        );
+        return {
+          event: ev,
+          hideType: isSeriesHide ? ('series' as const) : ('instance' as const),
+          hideIdKey: isSeriesHide
+            ? hideKey(ev.source, ev.seriesId!)
+            : hideKey(ev.source, ev.id),
+        };
+      });
+  }, [calendarEvents, hiddenInstances, hiddenSeries]);
+
+  // Dedupe the "Hidden events" panel — a hidden series will match every
+  // instance of itself in the feed, so show the series once.
+  const hiddenEventsDisplay = useMemo(() => {
+    const seen = new Set<string>();
+    const out: typeof hiddenEventsList = [];
+    for (const h of hiddenEventsList) {
+      if (seen.has(h.hideIdKey)) continue;
+      seen.add(h.hideIdKey);
+      out.push(h);
+    }
+    return out;
+  }, [hiddenEventsList]);
+
+  // ─── Hide / Unhide actions ───────────────────────────────────────
+  // All writes use arrayUnion/arrayRemove on nested map fields, which
+  // Firestore supports with dot-path updates. We mutate SWR optimistically
+  // by calling mutateUser() after the write commits.
+  const persistHide = useCallback(
+    async (kind: 'instance' | 'series', key: string, remove = false) => {
+      if (!user?.uid) return;
+      const db = getDb();
+      if (!db) return;
+      const field =
+        kind === 'instance'
+          ? 'hiddenCalendarEvents.instanceIds'
+          : 'hiddenCalendarEvents.seriesIds';
+      try {
+        await updateDoc(doc(db, 'users', user.uid), {
+          [field]: remove ? arrayRemove(key) : arrayUnion(key),
+        });
+        mutateUser();
+      } catch (err) {
+        console.error(`Failed to ${remove ? 'unhide' : 'hide'} calendar ${kind}:`, err);
+      }
+    },
+    [user?.uid, mutateUser]
+  );
+
+  const handleHideClick = useCallback((ev: CollapsedCalendarEvent) => {
+    // Recurring events (series or multiple matched occurrences) get the
+    // chooser modal; one-offs hide immediately.
+    if (ev.isRecurring) {
+      setHideTarget(ev);
+    } else {
+      void persistHide('instance', hideKey(ev.source, ev.id));
+    }
+  }, [persistHide]);
+
+  const confirmHideInstance = useCallback(async () => {
+    if (!hideTarget) return;
+    setHiding(true);
+    await persistHide('instance', hideKey(hideTarget.source, hideTarget.id));
+    setHiding(false);
+    setHideTarget(null);
+  }, [hideTarget, persistHide]);
+
+  const confirmHideSeries = useCallback(async () => {
+    if (!hideTarget) return;
+    setHiding(true);
+    // Prefer the real seriesId when available. For title-fallback-only
+    // groups (no server seriesId), hide every instance in the bucket so
+    // the whole visible series disappears.
+    if (hideTarget.seriesId) {
+      await persistHide('series', hideKey(hideTarget.source, hideTarget.seriesId));
+    } else {
+      for (const occ of hideTarget.occurrences) {
+        await persistHide('instance', hideKey(occ.source, occ.id));
+      }
+    }
+    setHiding(false);
+    setHideTarget(null);
+  }, [hideTarget, persistHide]);
+
+  const handleUnhide = useCallback(
+    (kind: 'instance' | 'series', key: string) => {
+      void persistHide(kind, key, true);
+    },
+    [persistHide]
+  );
+
 
   // ─── URL param handling ───────────────────────────────────────────
   useEffect(() => {
@@ -781,38 +979,117 @@ export default function EventsPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '24px', color: 'var(--text2)' }}>
               <div className="loading-spinner" style={{ width: '20px', height: '20px' }} />Loading calendar events...
             </div>
-          ) : calendarEvents.length === 0 ? (
+          ) : visibleEvents.length === 0 ? (
             <div style={{ padding: '24px', background: 'var(--surface)', borderRadius: '8px', border: '1px solid var(--border)', color: 'var(--text2)', fontSize: '14px', textAlign: 'center' }}>
-              No upcoming events in the next 30 days.
+              {calendarEvents.length === 0
+                ? 'No upcoming events in the next 30 days.'
+                : `All ${calendarEvents.length} upcoming event${calendarEvents.length === 1 ? '' : 's'} hidden. Manage hidden events below.`}
             </div>
           ) : (
             <div style={{ display: 'grid', gap: '12px' }}>
-              {calendarEvents.map((calEvent) => {
+              {visibleEvents.map((calEvent) => {
                 const urls = detectEventUrls(calEvent.description);
+                const occurrenceCount = calEvent.occurrences.length;
                 return (
                   <div key={`${calEvent.source}-${calEvent.id}`} className="card"
                     style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', cursor: 'default' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
                         <h3 style={{ fontSize: '15px', color: 'var(--text)', margin: 0, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {calEvent.title}
                         </h3>
                         <SourceBadge source={calEvent.source} />
+                        {calEvent.isRecurring && (
+                          <span
+                            title={`Recurring event — ${occurrenceCount} upcoming in the next 30 days`}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px',
+                              borderRadius: '4px', fontSize: '11px', fontWeight: 600,
+                              background: 'rgba(249, 148, 30, 0.12)', color: '#F9941E',
+                            }}
+                          >
+                            🔁 {occurrenceCount > 1 ? `${occurrenceCount} upcoming` : 'Recurring'}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: '13px', color: 'var(--text2)', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                        <span>🗓 {formatEventDate(calEvent.startTime)}</span>
+                        <span>🗓 {calEvent.isRecurring && occurrenceCount > 1 ? 'Next: ' : ''}{formatEventDate(calEvent.startTime)}</span>
                         {calEvent.location && <span>📍 {calEvent.location}</span>}
                         <span>👥 {calEvent.attendees.length} attendee{calEvent.attendees.length !== 1 ? 's' : ''}</span>
                       </div>
                       <EventUrlBadges urls={urls} />
                     </div>
-                    <button className="btn primary" onClick={() => handleCalendarEventPreBrief(calEvent)}
-                      style={{ marginLeft: '16px', whiteSpace: 'nowrap', fontSize: '12px' }}>
-                      Generate Pre-Brief
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
+                      <button
+                        className="btn primary"
+                        onClick={() => handleCalendarEventPreBrief(calEvent)}
+                        style={{ whiteSpace: 'nowrap', fontSize: '12px' }}
+                      >
+                        Generate Pre-Brief
+                      </button>
+                      <button
+                        onClick={() => handleHideClick(calEvent)}
+                        title={calEvent.isRecurring ? 'Hide this occurrence or the whole series' : 'Hide this event'}
+                        aria-label="Hide event"
+                        style={{
+                          background: 'transparent', border: '1px solid var(--border)',
+                          color: 'var(--text2)', borderRadius: '6px',
+                          width: '32px', height: '32px', cursor: 'pointer', fontSize: '16px',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Hidden events management */}
+          {hiddenEventsDisplay.length > 0 && (
+            <div style={{ marginTop: '16px' }}>
+              <button
+                onClick={() => setShowHiddenPanel((v) => !v)}
+                style={{
+                  background: 'transparent', border: 'none', color: 'var(--text2)',
+                  fontSize: '12px', cursor: 'pointer', padding: '4px 0',
+                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                }}
+              >
+                {showHiddenPanel ? '▾' : '▸'} Hidden events ({hiddenEventsDisplay.length})
+              </button>
+              {showHiddenPanel && (
+                <div style={{ display: 'grid', gap: '8px', marginTop: '8px' }}>
+                  {hiddenEventsDisplay.map(({ event, hideType, hideIdKey }) => (
+                    <div
+                      key={hideIdKey}
+                      style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '10px 14px', background: 'var(--surface)',
+                        border: '1px solid var(--border)', borderRadius: '6px',
+                        fontSize: '13px',
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0, color: 'var(--text2)' }}>
+                        <span style={{ color: 'var(--text)', fontWeight: 500 }}>{event.title}</span>
+                        <span style={{ marginLeft: '8px', fontSize: '11px' }}>
+                          {hideType === 'series' ? 'entire series hidden' : 'single occurrence hidden'}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleUnhide(hideType, hideIdKey)}
+                        className="btn"
+                        style={{ fontSize: '11px', padding: '4px 10px' }}
+                      >
+                        Unhide
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1339,6 +1616,70 @@ export default function EventsPage() {
           </div>
         </Modal>
       )}
+      {/* ═══ Hide Event Chooser Modal ═══════════════════════════════ */}
+      {hideTarget && (
+        <Modal
+          isOpen={!!hideTarget}
+          onClose={() => { if (!hiding) setHideTarget(null); }}
+          title="Hide this event?"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <div style={{ fontSize: '15px', color: 'var(--text)', fontWeight: 600, marginBottom: '4px' }}>
+                {hideTarget.title}
+              </div>
+              <div style={{ fontSize: '13px', color: 'var(--text2)' }}>
+                Recurring event · {hideTarget.occurrences.length} upcoming in the next 30 days
+              </div>
+            </div>
+
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text2)', lineHeight: 1.6 }}>
+              This is a repeating meeting. You can hide just this one occurrence,
+              or hide every occurrence of the series. You can unhide from the
+              &ldquo;Hidden events&rdquo; panel at any time.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={confirmHideSeries}
+                disabled={hiding}
+                className="btn primary"
+                style={{ padding: '10px 16px', fontSize: '13px', justifyContent: 'flex-start' }}
+              >
+                Hide the whole series
+                <span style={{ display: 'block', fontSize: '11px', fontWeight: 400, opacity: 0.85, marginTop: '2px' }}>
+                  All {hideTarget.occurrences.length} upcoming occurrences removed from this list
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmHideInstance}
+                disabled={hiding}
+                className="btn"
+                style={{ padding: '10px 16px', fontSize: '13px', justifyContent: 'flex-start' }}
+              >
+                Hide just this occurrence
+                <span style={{ display: 'block', fontSize: '11px', fontWeight: 400, opacity: 0.85, marginTop: '2px' }}>
+                  {formatEventDate(hideTarget.startTime)} only
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setHideTarget(null)}
+                disabled={hiding}
+                className="btn"
+                style={{ padding: '8px 16px', fontSize: '12px', background: 'transparent' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
     </main>
   );
 }
