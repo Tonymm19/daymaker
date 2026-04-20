@@ -123,7 +123,38 @@ export async function GET(req: NextRequest) {
       orderBy: 'startTime',
     });
 
-    const events: CalendarEvent[] = (response.data.items || []).map((event) => {
+    // Skip event types that are never real meetings. Google surfaces these
+    // in the primary calendar but they're inappropriate for pre-briefing
+    // (no attendees, no agenda) and would clutter the upcoming list. We
+    // keep 'default' and any unknown/new type to be conservative.
+    const SKIPPED_EVENT_TYPES = new Set([
+      'birthday',       // Auto-generated from Google Contacts
+      'focusTime',      // Personal focus blocks
+      'outOfOffice',    // OOO markers
+      'workingLocation',// WFH / office-day indicators
+      'fromGmail',      // Flight / package / hotel auto-events from Gmail
+    ]);
+
+    // Title-pattern fallback for cases where eventType is missing on the
+    // expanded instance. Deliberately conservative — matches only titles
+    // that are unambiguously Google's birthday format to avoid killing
+    // real meetings that happen to mention "birthday".
+    const BIRTHDAY_TITLE_PATTERN = /^.+?(?:'s)?\s+birthday(?:'s\s+birthday)?$/i;
+
+    const filteredItems = (response.data.items || []).filter((event) => {
+      const etype = event.eventType;
+      if (etype && SKIPPED_EVENT_TYPES.has(etype)) return false;
+      // Fallback: all-day, zero-attendee, title matches birthday pattern
+      if (
+        !event.attendees?.length &&
+        Boolean(event.start?.date && !event.start?.dateTime) &&
+        event.summary &&
+        BIRTHDAY_TITLE_PATTERN.test(event.summary.trim())
+      ) return false;
+      return true;
+    });
+
+    const events: CalendarEvent[] = filteredItems.map((event) => {
       const isAllDay = Boolean(event.start?.date && !event.start?.dateTime);
 
       return {
