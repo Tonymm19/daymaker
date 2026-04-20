@@ -36,9 +36,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     const userDoc = userSnap.data() as DaymakerUser;
+    // Fallback so prompts never contain "representing undefined" if the user
+    // doc is missing a displayName (early-lifecycle accounts, seeded records).
+    const userDisplayName = userDoc.displayName || 'the user';
 
-    // 1a. Plan limit check + increment (transactional so we can't double-charge
-    //     a racing caller on the free tier).
+    // 2. Load Target Contact — done BEFORE the plan-limit transaction so we
+    //    never charge a Deep Dive for a contact that can't produce a useful
+    //    analysis.
+    const targetSnap = await adminDb.collection('users').doc(userId).collection('contacts').doc(targetContactId).get();
+    if (!targetSnap.exists) {
+      return NextResponse.json({ error: 'Target contact not found' }, { status: 404 });
+    }
+    const targetContact = targetSnap.data() as Contact;
+
+    // 2a. Reject contacts with no company AND no position. Without either, the
+    //     context query is empty and Claude returns generic filler.
+    const hasCompany = !!(targetContact.company && targetContact.company.trim());
+    const hasPosition = !!(targetContact.position && targetContact.position.trim());
+    if (!hasCompany && !hasPosition) {
+      return NextResponse.json({
+        error: 'insufficient_contact_data',
+        message: 'This contact has insufficient profile data (missing both company and position). Add details to the contact and try again.',
+      }, { status: 400 });
+    }
+
+    // 3. Plan limit check + increment (transactional so we can't double-charge
+    //    a racing caller on the free tier).
     const userRef = adminDb.collection('users').doc(userId);
     const nowForLimit = new Date();
     const currentMonthStr = `${nowForLimit.getFullYear()}-${(nowForLimit.getMonth() + 1).toString().padStart(2, '0')}`;
@@ -70,13 +93,6 @@ export async function POST(req: Request) {
       }
       throw err;
     }
-
-    // 2. Load Target Contact
-    const targetSnap = await adminDb.collection('users').doc(userId).collection('contacts').doc(targetContactId).get();
-    if (!targetSnap.exists) {
-      return NextResponse.json({ error: 'Target contact not found' }, { status: 404 });
-    }
-    const targetContact = targetSnap.data() as Contact;
 
     // 3. RAG Retrieval context gathering
     // Use the target's company and position as the anchor point
@@ -129,7 +145,7 @@ export async function POST(req: Request) {
       targetContext += `\nCategories: ${targetContact.categories.join(', ')}`;
     }
 
-    let userContext = `Name: ${userDoc.displayName}\nNorth Star: ${userDoc.northStar || 'General networking and growth'}\n`;
+    let userContext = `Name: ${userDisplayName}\nNorth Star: ${userDoc.northStar || 'General networking and growth'}\n`;
     if (userDoc.currentGoal && userDoc.currentGoal.trim()) {
       userContext += `Current Goal: ${userDoc.currentGoal.trim()}\n`;
     }
@@ -163,7 +179,7 @@ export async function POST(req: Request) {
     // 4. Claude Execution
     const systemPrompt = `You are an elite dual-agent strategic engine for Daymaker Connect. 
 You will simulate a precise 4-round dynamic dialogue between two AI agents:
-1. User Agent (representing ${userDoc.displayName})
+1. User Agent (representing ${userDisplayName})
 2. Target Agent (representing ${targetContact.fullName})
 
 For the Target, you have extremely limited public information (just name, company, position). Use your general knowledge of the company and role to fill context. During Round 1, explicitly note when you are inferring contexts rather than working from verified data.
@@ -259,10 +275,42 @@ Execute the 4-Round JSON Deep Dive. Remember to acknowledge the limited Target d
       // temperature 0 keeps the synergy score stable across regenerations so
       // repeat runs on the same contact don't swing the number by 15+ points.
       temperature: 0,
-      maxTokens: 3500
+      // 8000 gives headroom for executive summary + 3-5 synergies + action
+      // items for both parties + 4 full dialogue rounds. At Sonnet pricing
+      // Claude only writes what it needs, so the higher ceiling doesn't
+      // raise typical cost — it prevents truncation.
+      maxTokens: 8000
     });
 
-    const parsedData = extractJson<any>(response.content);
+    // Fix C2: parse failures used to 500 after the user was already charged a
+    // Deep Dive. Catch here, log the raw response for debugging, refund the
+    // quota, and return a 502 so the client knows nothing was counted.
+    let parsedData;
+    try {
+      parsedData = extractJson<any>(response.content);
+    } catch {
+      console.error('[Deep Dive] JSON parse failed. Raw response:', response.content);
+      try {
+        await adminDb.runTransaction(async (t) => {
+          const snap = await t.get(userRef);
+          if (!snap.exists) return;
+          const data = snap.data()!;
+          const storedMonth = data.currentMonthString || '';
+          const current = storedMonth === currentMonthStr ? (data.currentMonthDeepDives || 0) : 0;
+          const refunded = Math.max(0, current - 1);
+          t.update(userRef, {
+            currentMonthDeepDives: refunded,
+            updatedAt: new Date(),
+          });
+        });
+      } catch (refundErr) {
+        console.error('[Deep Dive] Quota refund failed after parse error:', refundErr);
+      }
+      return NextResponse.json({
+        error: 'parse_failed',
+        message: 'Analysis failed to generate valid results. Please try again. No Deep Dive was counted against your plan.',
+      }, { status: 502 });
+    }
 
     // 5. Structure & Persistence
     const deepdiveId = randomUUID();

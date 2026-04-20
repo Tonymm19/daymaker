@@ -7,6 +7,7 @@ import { getAuth, getDb } from '@/lib/firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
 import type { DeepDive } from '@/lib/types';
 import Link from 'next/link';
+import Modal from '@/components/ui/Modal';
 
 export default function DeepDiveView() {
   const params = useParams();
@@ -19,12 +20,18 @@ export default function DeepDiveView() {
   const [viewMode, setViewMode] = useState<'summary' | 'transcript'>('summary');
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenError, setRegenError] = useState('');
+  const [showRegenConfirm, setShowRegenConfirm] = useState(false);
+
+  // Open the confirm modal. The actual regenerate work lives in
+  // handleRegenerate below; the modal's Regenerate button invokes it.
+  const maybeRegenerate = () => {
+    if (!deepDive || !user?.uid) return;
+    setShowRegenConfirm(true);
+  };
 
   const handleRegenerate = async () => {
     if (!deepDive || !user?.uid) return;
-    if (!confirm('Regenerate this Deep Dive? The existing analysis will be preserved in history, and a new one will be created.')) {
-      return;
-    }
+    setShowRegenConfirm(false);
     setIsRegenerating(true);
     setRegenError('');
     try {
@@ -287,16 +294,47 @@ export default function DeepDiveView() {
       )}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '40px', flexWrap: 'wrap' }}>
         <button
-          onClick={handleRegenerate}
+          onClick={maybeRegenerate}
           disabled={isRegenerating}
           className="btn"
           style={{ background: 'var(--darker)', border: '1px solid var(--border)', color: 'var(--text)', padding: '12px 24px' }}
         >
           {isRegenerating ? 'Regenerating...' : 'Regenerate Analysis'}
         </button>
-        <button className="btn" style={{ background: 'var(--darker)', border: '1px solid var(--border)', color: 'var(--text)', padding: '12px 24px' }}>Share Results</button>
-        <button className="btn primary" style={{ padding: '12px 24px' }}>Schedule Follow-Up</button>
       </div>
+
+      {showRegenConfirm && (
+        <Modal
+          isOpen={showRegenConfirm}
+          onClose={() => setShowRegenConfirm(false)}
+          title="Regenerate this Deep Dive?"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: 'var(--text)', lineHeight: 1.6 }}>
+              The existing analysis will be preserved in your history and a new one will be created.
+              This counts as one Deep Dive against your plan.
+            </p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setShowRegenConfirm(false)}
+                className="btn"
+                style={{ padding: '8px 16px', fontSize: '13px', background: 'var(--dark)', color: 'var(--text)', border: '1px solid var(--border)' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRegenerate}
+                className="btn primary"
+                style={{ padding: '8px 16px', fontSize: '13px' }}
+              >
+                Regenerate
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
     </main>
   );
