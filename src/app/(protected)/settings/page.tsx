@@ -1,15 +1,51 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/firebase/AuthContext';
 import { useUser } from '@/lib/hooks/useUser';
 import { useContacts } from '@/lib/hooks/useContacts';
 import CsvUpload from '@/components/import/CsvUpload';
 import Modal from '@/components/ui/Modal';
-import { doc, updateDoc } from 'firebase/firestore';
+import Avatar from '@/components/ui/Avatar';
+import { doc, updateDoc, deleteField } from 'firebase/firestore';
 import { getDb } from '@/lib/firebase/config';
 import { getAuth } from '@/lib/firebase/config';
 import type { DaymakerUser, RmActiveTheme, RmExpertiseArea } from '@/lib/types';
+
+const MAX_PHOTO_BYTES = 2 * 1024 * 1024; // 2MB
+const PHOTO_TARGET_PX = 200;
+const ACCEPTED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+async function resizeImageToDataUrl(file: File, size: number): Promise<string> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.readAsDataURL(file);
+  });
+
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new window.Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error('Could not decode image'));
+    el.src = dataUrl;
+  });
+
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas unavailable');
+
+  // Center-crop cover so the square fills without distortion.
+  const scale = Math.max(size / img.width, size / img.height);
+  const sw = size / scale;
+  const sh = size / scale;
+  const sx = (img.width - sw) / 2;
+  const sy = (img.height - sh) / 2;
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, size, size);
+  return canvas.toDataURL('image/jpeg', 0.85);
+}
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -20,6 +56,60 @@ export default function SettingsPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-uploading the same file
+    if (!file || !user) return;
+
+    setPhotoError('');
+    if (!ACCEPTED_PHOTO_TYPES.includes(file.type)) {
+      setPhotoError('Use a .jpg, .png, or .webp image.');
+      return;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      setPhotoError('Image must be 2MB or smaller.');
+      return;
+    }
+
+    setPhotoBusy(true);
+    try {
+      const dataUrl = await resizeImageToDataUrl(file, PHOTO_TARGET_PX);
+      const db = getDb();
+      if (!db) throw new Error('Database not initialized');
+      await updateDoc(doc(db, 'users', user.uid), {
+        profilePhotoUrl: dataUrl,
+        updatedAt: new Date(),
+      });
+      await mutate();
+    } catch (err: any) {
+      setPhotoError(err?.message || 'Could not upload photo.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    if (!user) return;
+    setPhotoError('');
+    setPhotoBusy(true);
+    try {
+      const db = getDb();
+      if (!db) throw new Error('Database not initialized');
+      await updateDoc(doc(db, 'users', user.uid), {
+        profilePhotoUrl: deleteField(),
+        updatedAt: new Date(),
+      });
+      await mutate();
+    } catch (err: any) {
+      setPhotoError(err?.message || 'Could not remove photo.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
 
   // Hydrate input field natively upon fetch
   useEffect(() => {
@@ -135,6 +225,59 @@ export default function SettingsPage() {
           {/* Profile Section */}
           <div className="card" style={{ padding: '24px' }}>
             <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', color: 'var(--text)' }}>Profile</h3>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid var(--border)' }}>
+              <Avatar
+                photoUrl={userDoc?.profilePhotoUrl}
+                name={user?.displayName}
+                email={user?.email}
+                size={72}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handlePhotoSelect}
+                    style={{ display: 'none' }}
+                  />
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={photoBusy}
+                    style={{ padding: '6px 14px', fontSize: '13px' }}
+                  >
+                    {photoBusy ? 'Uploading...' : userDoc?.profilePhotoUrl ? 'Change Photo' : 'Upload Photo'}
+                  </button>
+                  {userDoc?.profilePhotoUrl && !photoBusy && (
+                    <button
+                      type="button"
+                      onClick={handleRemovePhoto}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--muted)',
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        padding: 0,
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      Remove Photo
+                    </button>
+                  )}
+                </div>
+                <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: 'var(--muted)' }}>
+                  JPG, PNG, or WebP. Max 2MB. Resized to 200×200.
+                </p>
+                {photoError && (
+                  <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: 'var(--red)' }}>{photoError}</p>
+                )}
+              </div>
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Display Name</label>

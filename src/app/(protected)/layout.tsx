@@ -8,6 +8,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { AuthProvider, useAuth } from '@/lib/firebase/AuthContext';
 import { ensureUserDocument } from '@/lib/firebase/auth';
 import TopNav from '@/components/TopNav';
@@ -56,12 +57,18 @@ function ProtectedContent({ children }: { children: React.ReactNode }) {
         style={{
           borderTop: '1px solid var(--border)',
           padding: '20px 24px',
-          textAlign: 'center',
           color: 'var(--muted)',
           fontSize: '12px',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '16px',
+          flexWrap: 'wrap',
         }}
       >
-        © 2026 {BRAND.company} · {BRAND.name}
+        <span>© 2026 {BRAND.company} · {BRAND.name}</span>
+        <Link href="/privacy" style={{ color: 'var(--muted)', textDecoration: 'none' }}>Privacy Policy</Link>
+        <Link href="/terms" style={{ color: 'var(--muted)', textDecoration: 'none' }}>Terms</Link>
       </footer>
     </div>
   );

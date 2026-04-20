@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { BRAND } from '@/lib/brand.config';
 
 const FEATURES = [
@@ -115,6 +116,18 @@ export default function LandingPage() {
           Built by{' '}
           <span style={{ color: 'var(--orange)' }}>{BRAND.company}</span>
         </p>
+
+        <div
+          className="mt-6 flex flex-wrap justify-center gap-4 text-xs"
+          style={{ color: 'var(--muted)' }}
+        >
+          <Link href="/privacy" style={{ color: 'var(--muted)', textDecoration: 'none' }}>
+            Privacy Policy
+          </Link>
+          <Link href="/terms" style={{ color: 'var(--muted)', textDecoration: 'none' }}>
+            Terms
+          </Link>
+        </div>
       </div>
     </main>
   );

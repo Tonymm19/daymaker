@@ -32,6 +32,9 @@ export interface DaymakerUser {
   uid: string;
   email: string;
   displayName: string;
+  /** Base64 data URL for the user's profile picture (200x200 JPEG).
+   *  Stored inline on the user doc to avoid Cloud Storage setup. */
+  profilePhotoUrl?: string;
   plan: PlanType;
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;

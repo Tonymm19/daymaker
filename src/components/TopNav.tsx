@@ -12,8 +12,10 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/firebase/AuthContext';
+import { useUser } from '@/lib/hooks/useUser';
 import { signOut } from '@/lib/firebase/auth';
 import { useTheme } from '@/lib/theme/ThemeContext';
+import Avatar from '@/components/ui/Avatar';
 
 const NAV_TABS = [
   { label: 'Dashboard', href: '/dashboard' },
@@ -21,16 +23,6 @@ const NAV_TABS = [
   { label: 'Event Pre-Brief', href: '/events' },
   { label: 'Deep Dive', href: '/deepdive' },
 ];
-
-function getInitials(name: string | null): string {
-  if (!name) return '??';
-  return name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-}
 
 function isTabActive(pathname: string, href: string): boolean {
   return href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(href);
@@ -56,6 +48,7 @@ function ThemeToggleIcon({ theme }: { theme: 'dark' | 'light' }) {
 export default function TopNav() {
   const pathname = usePathname();
   const { user } = useAuth();
+  const { userDoc } = useUser();
   const { theme, toggleTheme } = useTheme();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -93,7 +86,7 @@ export default function TopNav() {
   };
 
   const displayName = user?.displayName || user?.email || 'User';
-  const initials = getInitials(user?.displayName ?? user?.email ?? null);
+  const photoUrl = userDoc?.profilePhotoUrl ?? null;
 
   return (
     <div className="topnav">
@@ -168,7 +161,7 @@ export default function TopNav() {
             }}
           >
             {displayName}
-            <div className="nav-user-avatar">{initials}</div>
+            <Avatar photoUrl={photoUrl} name={user?.displayName} email={user?.email} size={28} />
           </button>
 
           {dropdownOpen && (
@@ -229,7 +222,7 @@ export default function TopNav() {
 
         {/* Mobile-only cluster: avatar + hamburger */}
         <div className="mobile-nav-cluster">
-          <div className="nav-user-avatar" aria-hidden="true">{initials}</div>
+          <Avatar photoUrl={photoUrl} name={user?.displayName} email={user?.email} size={28} />
           <button
             type="button"
             className="hamburger-btn"
@@ -257,7 +250,7 @@ export default function TopNav() {
           <div className="mobile-menu-panel" role="dialog" aria-modal="true" aria-label="Navigation menu">
             <div className="mobile-menu-header">
               <div className="mobile-menu-user">
-                <div className="nav-user-avatar">{initials}</div>
+                <Avatar photoUrl={photoUrl} name={user?.displayName} email={user?.email} size={36} />
                 <div className="mobile-menu-user-text">
                   <div className="mobile-menu-user-name">{user?.displayName || 'User'}</div>
                   {user?.email && <div className="mobile-menu-user-email">{user.email}</div>}

@@ -179,6 +179,23 @@ export default function LoginPage() {
           </Link>
         </p>
       </div>
+
+      <div
+        style={{
+          marginTop: '24px',
+          display: 'flex',
+          gap: '16px',
+          fontSize: '12px',
+          color: 'var(--muted)',
+        }}
+      >
+        <Link href="/privacy" style={{ color: 'var(--muted)', textDecoration: 'none' }}>
+          Privacy Policy
+        </Link>
+        <Link href="/terms" style={{ color: 'var(--muted)', textDecoration: 'none' }}>
+          Terms
+        </Link>
+      </div>
     </main>
   );
 }

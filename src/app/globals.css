@@ -761,3 +761,47 @@ body {
     padding: 16px 0 !important;
   }
 }
+
+/* =============================================
+   LEGAL PAGES (privacy, terms) — article typography
+   ============================================= */
+.legal-content {
+  color: var(--text2);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.legal-content h2 {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--text);
+  margin: 40px 0 12px;
+  line-height: 1.2;
+}
+.legal-content h3 {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--orange);
+  margin: 28px 0 8px;
+}
+.legal-content p {
+  margin: 0 0 14px;
+}
+.legal-content ul {
+  margin: 0 0 14px;
+  padding-left: 20px;
+}
+.legal-content li {
+  margin: 0 0 6px;
+}
+.legal-content a {
+  color: var(--orange);
+  text-decoration: underline;
+}
+.legal-content strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
