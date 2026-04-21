@@ -45,6 +45,9 @@ function sameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
+const isUrl = (value: string): boolean =>
+  /^https?:\/\//i.test(value.trim());
+
 export default function NextEventHero() {
   const { user } = useAuth();
   const { userDoc } = useUser();
@@ -271,7 +274,23 @@ export default function NextEventHero() {
             {nextEvent.location && (
               <>
                 <span>·</span>
-                <span style={{ color: 'var(--muted)' }}>{nextEvent.location}</span>
+                {isUrl(nextEvent.location) ? (
+                  <a
+                    href={nextEvent.location}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: 'var(--muted)',
+                      textDecoration: 'underline',
+                      wordBreak: 'break-all',
+                      overflowWrap: 'break-word',
+                    }}
+                  >
+                    {nextEvent.location}
+                  </a>
+                ) : (
+                  <span style={{ color: 'var(--muted)' }}>{nextEvent.location}</span>
+                )}
               </>
             )}
           </div>

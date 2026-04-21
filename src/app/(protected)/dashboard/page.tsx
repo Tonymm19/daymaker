@@ -321,7 +321,7 @@ export default function DashboardPage() {
               textDecoration: 'none',
               fontWeight: 500 
             }}>
-              Get New LinkedIn Data ↗
+              Refresh LinkedIn Data ↗
             </a>
             <button className="btn" onClick={() => setShowUpload(true)}>Upload CSV</button>
           </div>
@@ -438,21 +438,10 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="stat-card card" style={{ padding: '12px 16px' }}>
-              <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Emails</div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '18px', fontWeight: 700, color: 'var(--text)' }}>
-                {isLoading ? '...' : stats.emails.toLocaleString()}
-              </div>
-            </div>
-            <div className="stat-card card" style={{ padding: '12px 16px' }}>
               <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Categorized</div>
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '18px', fontWeight: 700, color: 'var(--text)' }}>
                 {isLoading ? '...' : stats.categorized.toLocaleString()}
               </div>
-              {!isLoading && stats.total > 0 && (
-                <div style={{ marginTop: '2px', fontSize: '10px', color: 'var(--muted)' }}>
-                  Index: {stats.embedded.toLocaleString()} / {stats.total.toLocaleString()}
-                </div>
-              )}
             </div>
           </div>
 

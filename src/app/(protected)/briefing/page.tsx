@@ -342,7 +342,7 @@ export default function BriefingPage() {
         <p style={{ color: 'var(--text2)', fontSize: '14px', marginBottom: '24px' }}>
           Your network intelligence is as fresh as your last LinkedIn export. Re-import now to detect the latest job movements and clusters.
         </p>
-        <Link href="/dashboard" className="btn primary" style={{ background: 'var(--blue)' }}>Get New LinkedIn Data</Link>
+        <Link href="/dashboard" className="btn primary" style={{ background: 'var(--blue)' }}>Refresh LinkedIn Data</Link>
       </div>
     </main>
   );

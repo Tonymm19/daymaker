@@ -171,9 +171,21 @@ export default function DeepDiveNewPage() {
       </div>
 
       <div style={{ marginTop: '24px' }}>
-        <Link href="/deepdive" style={{ color: 'var(--muted)', fontSize: '13px', textDecoration: 'none' }}>
+        <button
+          type="button"
+          onClick={() => router.back()}
+          style={{
+            color: 'var(--muted)',
+            fontSize: '13px',
+            textDecoration: 'none',
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 0,
+          }}
+        >
           ← Cancel
-        </Link>
+        </button>
       </div>
     </main>
   );

@@ -646,7 +646,7 @@ export default function SettingsPage() {
             <div style={{ display: 'flex', gap: '12px' }}>
               <button className="btn" onClick={() => setShowUpload(true)}>Upload CSV</button>
               <a href="https://www.linkedin.com/mypreferences/d/download-my-data" target="_blank" rel="noreferrer" className="btn" style={{ background: 'var(--dark)', color: 'var(--text)', border: '1px solid var(--border)', textDecoration: 'none' }}>
-                Get New LinkedIn Data ↗
+                Refresh LinkedIn Data ↗
               </a>
             </div>
           </div>
