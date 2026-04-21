@@ -12,6 +12,28 @@ function getClaude() {
   return new Anthropic({ apiKey });
 }
 
+/**
+ * Normalize a name for comparison against another name. Handles the
+ * common real-world cases that break exact-match lookups:
+ *  - Non-breaking spaces (U+00A0), figure spaces (U+2007), narrow
+ *    no-break spaces (U+202F) replaced with regular space — these
+ *    appear routinely in CSV exports from web platforms
+ *  - Multiple consecutive whitespace collapsed to single space
+ *  - Trimmed on both ends
+ *  - Lowercased
+ *
+ * Intentionally NOT doing: diacritic folding, middle-name stripping,
+ * nickname expansion. Those are heuristics with real false-positive
+ * risk and can be added later if needed.
+ */
+function normalizeNameForMatch(s: string): string {
+  return s
+    .replace(/[\u00A0\u2007\u202F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
 export async function POST(req: Request) {
   try {
     const { adminDb } = await import('@/lib/firebase/admin');
@@ -123,15 +145,15 @@ export async function POST(req: Request) {
       if (hiddenSet.has(data.contactId)) return;
       const record = { contactId: data.contactId, linkedInUrl: data.linkedInUrl || '' };
       if (data.firstName && data.lastName) {
-        networkByName.set(`${data.firstName} ${data.lastName}`.toLowerCase(), record);
+        networkByName.set(normalizeNameForMatch(`${data.firstName} ${data.lastName}`), record);
       } else if (data.fullName) {
-        networkByName.set(data.fullName.toLowerCase(), record);
+        networkByName.set(normalizeNameForMatch(data.fullName), record);
       }
     });
 
     // Bucket attendees into mapped input objects
     const mappedAttendeesToProcess = attendees.map(att => {
-      const match = networkByName.get((att.name || '').toLowerCase().trim());
+      const match = networkByName.get(normalizeNameForMatch(att.name || ''));
       return {
         name: att.name || 'Unknown',
         company: att.company || 'Unknown',
@@ -222,17 +244,23 @@ ${rmBlock}${descriptionBlock}${urlsBlock}
         const cleanedStr = textOutput.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
         const parsedArr = JSON.parse(cleanedStr);
 
-        // Re-attach network enrichment (contactId, linkedInUrl) to each attendee
-        // by matching back to the input batch by name.
-        const enrichmentByName = new Map<string, { contactId?: string; linkedInUrl?: string }>();
+        // Map attendee name -> server-computed enrichment. Carries anchorStatus
+        // so we can override Claude's isInNetwork/connectionType output.
+        // Claude is unreliable at propagating these fields from input to
+        // output (observed: Your Anchors tab empty despite real overlap).
+        const enrichmentByName = new Map<
+          string,
+          { contactId?: string; linkedInUrl?: string; isAnchor: boolean }
+        >();
         for (const row of batchFull) {
-          enrichmentByName.set(row.name.toLowerCase().trim(), {
+          enrichmentByName.set(normalizeNameForMatch(row.name), {
             contactId: row._contactId,
             linkedInUrl: row._linkedInUrl,
+            isAnchor: row.anchorStatus === 'anchor',
           });
         }
         for (const att of parsedArr) {
-          const enrich = enrichmentByName.get((att.name || '').toLowerCase().trim());
+          const enrich = enrichmentByName.get(normalizeNameForMatch(att.name || ''));
           if (enrich?.contactId) att.contactId = enrich.contactId;
           if (enrich?.linkedInUrl) {
             att.linkedInUrl = enrich.linkedInUrl;
@@ -240,6 +268,15 @@ ${rmBlock}${descriptionBlock}${urlsBlock}
             // Fall back to a LinkedIn search URL so the "View LinkedIn Profile"
             // button is always usable, even for non-network attendees.
             att.linkedInUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(att.name + (att.company ? ' ' + att.company : ''))}`;
+          }
+          // Authoritatively set isInNetwork from server match, not Claude.
+          att.isInNetwork = Boolean(enrich?.isAnchor);
+          // If attendee is an anchor, force connectionType to 'anchor'
+          // regardless of what Claude returned (Claude sometimes emits
+          // 'must_meet' for high-score anchors). Keep Claude's value for
+          // non-anchors (must_meet / worth_meeting / new).
+          if (enrich?.isAnchor) {
+            att.connectionType = 'anchor';
           }
         }
         generatedAttendees.push(...parsedArr);
