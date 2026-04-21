@@ -104,9 +104,19 @@ export async function POST(req: Request) {
     const { buildRmContextBlockFromUser } = await import('@/lib/ai/rm-context');
     const rmBlock = buildRmContextBlockFromUser(userDoc);
 
-    // 2. Fetch User's Contacts to Determine Network Anchors
+    // 2. Fetch User's Contacts to Determine Network Anchors.
+    //    Project only the fields needed for name-lookup. Without this,
+    //    `.get()` pulls full documents including the ~12KB embedding array
+    //    per contact. On an 8,951-contact user that's ~200MB of Node heap
+    //    just to build the name map, which SIGABRTs the container on a
+    //    2GB Cloud Run instance (and still stresses 4GB once request
+    //    concurrency + Claude API buffers are factored in). With projection
+    //    the same lookup uses <1MB regardless of network size.
     const hiddenSet = new Set(userDoc.hiddenContacts || []);
-    const contactsSnap = await userRef.collection('contacts').get();
+    const contactsSnap = await userRef
+      .collection('contacts')
+      .select('contactId', 'firstName', 'lastName', 'fullName', 'linkedInUrl')
+      .get();
     const networkByName = new Map<string, { contactId: string; linkedInUrl: string }>();
     contactsSnap.forEach(doc => {
       const data = doc.data();
