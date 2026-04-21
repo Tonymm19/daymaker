@@ -75,7 +75,7 @@ export default function SearchTab({
     <div id="dsub-search">
       {/* Search Input */}
       <div className="search-box card" style={{ position: 'relative', marginBottom: '24px', display: 'flex', alignItems: 'center', padding: '0 16px' }}>
-        <svg style={{ position: 'absolute', left: '16px' }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2">
+        <svg style={{ position: 'absolute', left: '16px' }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" strokeWidth="2">
           <circle cx="11" cy="11" r="8"></circle>
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
         </svg>

@@ -869,3 +869,35 @@ body {
   font-weight: 600;
 }
 
+/* Home network search bar — elevated with a subtle orange tint so
+   it reads as the primary action on the dashboard. The .card class
+   still provides base border-radius and transition; these rules
+   layer on top for colored emphasis. */
+.search-box.card {
+  background: rgba(249, 148, 30, 0.05);
+  border: 1px solid rgba(249, 148, 30, 0.25);
+  box-shadow: 0 1px 3px rgba(249, 148, 30, 0.08);
+}
+.search-box.card:hover {
+  border-color: rgba(249, 148, 30, 0.4);
+  box-shadow: 0 2px 6px rgba(249, 148, 30, 0.12);
+}
+.search-box.card:focus-within {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px rgba(249, 148, 30, 0.15);
+}
+
+[data-theme="light"] .search-box.card {
+  background: rgba(249, 148, 30, 0.04);
+  border: 1px solid rgba(249, 148, 30, 0.3);
+  box-shadow: 0 1px 3px rgba(249, 148, 30, 0.06);
+}
+[data-theme="light"] .search-box.card:hover {
+  border-color: rgba(249, 148, 30, 0.5);
+  box-shadow: 0 2px 6px rgba(249, 148, 30, 0.1);
+}
+[data-theme="light"] .search-box.card:focus-within {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px rgba(249, 148, 30, 0.18);
+}
+
