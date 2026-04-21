@@ -159,8 +159,9 @@ export async function POST(req: Request) {
       ? `\n        Related event URLs (use to infer theme/audience, do not fabricate content from them):\n        ${urlLines.join('\n        ')}`
       : '';
 
-    // Batching to prevent prompt overload (max 50 at a time)
-    const BATCH_SIZE = 50;
+    // Each attendee response is ~350 output tokens. max_tokens is 8192.
+    // A batch of 20 uses ~7,000 tokens with headroom; 50 truncates.
+    const BATCH_SIZE = 20;
     for (let i = 0; i < mappedAttendeesToProcess.length; i += BATCH_SIZE) {
       const batchFull = mappedAttendeesToProcess.slice(i, i + BATCH_SIZE);
       // Strip private enrichment fields before sending to Claude — the model
