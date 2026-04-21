@@ -184,8 +184,17 @@ export async function POST(req: Request) {
     // Each attendee response is ~350 output tokens. max_tokens is 8192.
     // A batch of 20 uses ~7,000 tokens with headroom; 50 truncates.
     const BATCH_SIZE = 20;
-    for (let i = 0; i < mappedAttendeesToProcess.length; i += BATCH_SIZE) {
-      const batchFull = mappedAttendeesToProcess.slice(i, i + BATCH_SIZE);
+
+    // How many Claude batches to run concurrently. Set to 1 for strict
+    // sequential behavior (current default, safe for Anthropic Tier 1
+    // rate limits of 8K output tokens/min). Raise to 3 once on Tier 2
+    // (40K/min) — each batch uses ~7K output tokens, so 3 concurrent =
+    // ~21K in flight, comfortably under 40K/min with headroom for
+    // retries.
+    const CONCURRENCY_LIMIT = 1;
+
+    async function processBatch(startIndex: number): Promise<any[]> {
+      const batchFull = mappedAttendeesToProcess.slice(startIndex, startIndex + BATCH_SIZE);
       // Strip private enrichment fields before sending to Claude — the model
       // should only see what influences its scoring.
       const batch = batchFull.map(({ _contactId, _linkedInUrl, ...rest }) => rest);
@@ -279,16 +288,54 @@ ${rmBlock}${descriptionBlock}${urlsBlock}
             att.connectionType = 'anchor';
           }
         }
-        generatedAttendees.push(...parsedArr);
+        return parsedArr;
       } catch (err: any) {
-        console.error(`Claude Batch starting at index ${i} failed:`, err.message);
+        console.error(`Claude Batch starting at index ${startIndex} failed:`, err.message);
         failedBatches.push({
-          startIndex: i,
+          startIndex,
           size: batch.length,
           error: err?.message || 'Unknown error',
         });
         // Keep going — partial results are better than no results.
+        return [];
       }
+    }
+
+    // Build list of start indices for all batches upfront
+    const batchStartIndices: number[] = [];
+    for (let i = 0; i < mappedAttendeesToProcess.length; i += BATCH_SIZE) {
+      batchStartIndices.push(i);
+    }
+
+    // Bounded-concurrency dispatch. With CONCURRENCY_LIMIT=1 this is
+    // equivalent to a sequential for-loop. With >1 it runs multiple
+    // Claude calls in flight at once. Results collected in order by
+    // the original batch start index so generatedAttendees maintains
+    // deterministic attendee order regardless of completion order.
+    const resultsByStart = new Map<number, any[]>();
+
+    async function runWorker(queue: number[]): Promise<void> {
+      while (queue.length > 0) {
+        const startIndex = queue.shift();
+        if (startIndex === undefined) break;
+        const result = await processBatch(startIndex);
+        resultsByStart.set(startIndex, result);
+      }
+    }
+
+    const queue = [...batchStartIndices];
+    const workers = Array.from(
+      { length: Math.min(CONCURRENCY_LIMIT, queue.length) },
+      () => runWorker(queue)
+    );
+    await Promise.all(workers);
+
+    // Reassemble in original order so attendees in the final output
+    // match the input order (important for UI, debugging, and stable
+    // test expectations).
+    for (const startIndex of batchStartIndices) {
+      const result = resultsByStart.get(startIndex);
+      if (result) generatedAttendees.push(...result);
     }
 
     // If every batch failed, don't save an empty briefing.
