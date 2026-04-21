@@ -18,7 +18,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/firebase/AuthContext';
 import { useUser } from '@/lib/hooks/useUser';
 import { getDb } from '@/lib/firebase/config';
-import { collection, query, orderBy, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove, deleteDoc } from 'firebase/firestore';
 import { getAuth } from '@/lib/firebase/config';
 import Modal from '@/components/ui/Modal';
 import Papa from 'papaparse';
@@ -237,6 +237,15 @@ export default function EventsPage() {
   const [hiding, setHiding] = useState(false);
   const [showHiddenPanel, setShowHiddenPanel] = useState(false);
 
+  // Past briefings panel starts collapsed. Users click "Past Briefings
+  // (N)" to expand, same pattern as the Hidden events panel.
+  const [showPastBriefings, setShowPastBriefings] = useState(false);
+
+  // Per-briefing delete: `briefingToDelete` drives the confirm modal,
+  // `deletingBriefing` blocks double-submits during the Firestore write.
+  const [briefingToDelete, setBriefingToDelete] = useState<EventBriefing | null>(null);
+  const [deletingBriefing, setDeletingBriefing] = useState(false);
+
   // Calendar connection state
   const [googleConnected, setGoogleConnected] = useState(false);
   const [microsoftConnected, setMicrosoftConnected] = useState(false);
@@ -347,6 +356,31 @@ export default function EventsPage() {
     return out;
   }, [hiddenEventsList]);
 
+  // Split saved briefings into upcoming vs past based on event date.
+  // A briefing where eventDate < start of today is "past". Briefings
+  // with a missing or malformed eventDate are treated as upcoming to
+  // avoid silently hiding content we can't date-check.
+  const { upcomingBriefings, pastBriefings } = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const upcoming: EventBriefing[] = [];
+    const past: EventBriefing[] = [];
+    for (const ev of events) {
+      const seconds = (ev.eventDate as any)?.seconds;
+      if (typeof seconds !== 'number' || !Number.isFinite(seconds)) {
+        upcoming.push(ev);
+        continue;
+      }
+      const eventDate = new Date(seconds * 1000);
+      if (eventDate >= startOfToday) {
+        upcoming.push(ev);
+      } else {
+        past.push(ev);
+      }
+    }
+    return { upcomingBriefings: upcoming, pastBriefings: past };
+  }, [events]);
+
   // ─── Hide / Unhide actions ───────────────────────────────────────
   // All writes use arrayUnion/arrayRemove on nested map fields, which
   // Firestore supports with dot-path updates. We mutate SWR optimistically
@@ -413,6 +447,27 @@ export default function EventsPage() {
     },
     [persistHide]
   );
+
+  // ─── Delete briefing ─────────────────────────────────────────────
+  // Permanent removal of a saved Event Briefing. Writes to Firestore
+  // first, then updates local state so the list re-renders. No soft
+  // delete / archive; a deleted briefing is gone.
+  const confirmDeleteBriefing = useCallback(async () => {
+    if (!briefingToDelete || !user?.uid) return;
+    setDeletingBriefing(true);
+    try {
+      const db = getDb();
+      if (!db) throw new Error('Firestore unavailable');
+      await deleteDoc(doc(db, 'users', user.uid, 'events', briefingToDelete.eventId));
+      setEvents(events.filter(e => e.eventId !== briefingToDelete.eventId));
+      setBriefingToDelete(null);
+    } catch (err) {
+      console.error('Failed to delete briefing:', err);
+      alert('Failed to delete briefing. Please try again.');
+    } finally {
+      setDeletingBriefing(false);
+    }
+  }, [briefingToDelete, user?.uid, events]);
 
 
   // ─── URL param handling ───────────────────────────────────────────
@@ -939,6 +994,55 @@ export default function EventsPage() {
     : connectedCount === 1 ? (googleConnected ? 'Google Connected' : 'Outlook Connected')
       : '2 Calendars Connected';
 
+  // Render helper for a single briefing card. Used for both upcoming
+  // and past sections so layout stays identical. The outer div is NOT
+  // the click target — sub-regions (content + "View Briefing" link)
+  // handle their own navigation and the X button does stopPropagation
+  // so deleting doesn't accidentally navigate away.
+  const renderBriefingCard = (ev: EventBriefing) => {
+    const dateStr = ev.eventDate
+      ? new Date((ev.eventDate as any).seconds * 1000).toLocaleDateString()
+      : 'No date';
+    return (
+      <div key={ev.eventId} className="card"
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px' }}>
+        <div
+          onClick={() => router.push(`/events/${ev.eventId}`)}
+          style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+        >
+          <h3 style={{ fontSize: '16px', color: 'var(--text)', margin: '0 0 8px 0', fontFamily: "'Inter', sans-serif" }}>{ev.eventName}</h3>
+          <div style={{ fontSize: '13px', color: 'var(--text2)', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+            <span>📍 {ev.eventLocation || 'Unknown'}</span>
+            <span>📅 {dateStr}</span>
+            <span>👥 {ev.attendees?.length || 0} Attendees</span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: '16px' }}>
+          <div
+            onClick={() => router.push(`/events/${ev.eventId}`)}
+            style={{ color: 'var(--orange)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
+          >
+            View Briefing →
+          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); setBriefingToDelete(ev); }}
+            title="Delete this briefing"
+            aria-label="Delete briefing"
+            style={{
+              background: 'transparent', border: '1px solid var(--border)',
+              color: 'var(--text2)', borderRadius: '6px',
+              width: '32px', height: '32px', cursor: 'pointer', fontSize: '16px',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            ×
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // ═══════════════════════════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════════════════════════
@@ -1150,23 +1254,35 @@ export default function EventsPage() {
             <button className="btn primary" onClick={handleManualCreate}>+ New Event Briefing</button>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: '12px' }}>
-            {events.map(ev => {
-              const dateStr = ev.eventDate ? new Date((ev.eventDate as any).seconds * 1000).toLocaleDateString() : 'No date';
-              return (
-                <div key={ev.eventId} onClick={() => router.push(`/events/${ev.eventId}`)} className="card"
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', cursor: 'pointer' }}>
-                  <div>
-                    <h3 style={{ fontSize: '16px', color: 'var(--text)', margin: '0 0 8px 0', fontFamily: "'Inter', sans-serif" }}>{ev.eventName}</h3>
-                    <div style={{ fontSize: '13px', color: 'var(--text2)', display: 'flex', gap: '16px' }}>
-                      <span>📍 {ev.eventLocation || 'Unknown'}</span><span>📅 {dateStr}</span><span>👥 {ev.attendees?.length || 0} Attendees</span>
-                    </div>
+          <>
+            {/* Upcoming briefings */}
+            {upcomingBriefings.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: '12px' }}>
+                {upcomingBriefings.map(ev => renderBriefingCard(ev))}
+              </div>
+            )}
+
+            {/* Past briefings toggle + collapsed panel */}
+            {pastBriefings.length > 0 && (
+              <div style={{ marginTop: upcomingBriefings.length > 0 ? '16px' : 0 }}>
+                <button
+                  onClick={() => setShowPastBriefings(v => !v)}
+                  style={{
+                    background: 'transparent', border: 'none', color: 'var(--text2)',
+                    fontSize: '12px', cursor: 'pointer', padding: '4px 0',
+                    display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  }}
+                >
+                  {showPastBriefings ? '▾' : '▸'} Past Briefings ({pastBriefings.length})
+                </button>
+                {showPastBriefings && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: '12px', marginTop: '8px' }}>
+                    {pastBriefings.map(ev => renderBriefingCard(ev))}
                   </div>
-                  <div style={{ color: 'var(--orange)', fontWeight: 600, fontSize: '13px' }}>View Briefing →</div>
-                </div>
-              );
-            })}
-          </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -1689,6 +1805,52 @@ export default function EventsPage() {
                 type="button"
                 onClick={() => setHideTarget(null)}
                 disabled={hiding}
+                className="btn"
+                style={{ padding: '8px 16px', fontSize: '12px', background: 'transparent' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ═══ Delete Briefing Confirmation Modal ═══════════════════════ */}
+      {briefingToDelete && (
+        <Modal
+          isOpen={!!briefingToDelete}
+          onClose={() => { if (!deletingBriefing) setBriefingToDelete(null); }}
+          title="Delete this briefing?"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <div style={{ fontSize: '15px', color: 'var(--text)', fontWeight: 600, marginBottom: '4px' }}>
+                {briefingToDelete.eventName}
+              </div>
+              <div style={{ fontSize: '13px', color: 'var(--text2)' }}>
+                {briefingToDelete.attendees?.length || 0} attendee briefing
+              </div>
+            </div>
+
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text2)', lineHeight: 1.6 }}>
+              This will permanently delete the briefing and all its generated
+              attendee analysis. This cannot be undone.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={confirmDeleteBriefing}
+                disabled={deletingBriefing}
+                className="btn primary"
+                style={{ padding: '10px 16px', fontSize: '13px' }}
+              >
+                {deletingBriefing ? 'Deleting...' : 'Yes, delete this briefing'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setBriefingToDelete(null)}
+                disabled={deletingBriefing}
                 className="btn"
                 style={{ padding: '8px 16px', fontSize: '12px', background: 'transparent' }}
               >
