@@ -120,6 +120,28 @@ export async function POST(req: Request) {
       ].filter(Boolean).join('. ')}. Weight this short-horizon need heavily when scoring relevance.`
       : '';
 
+    // Filter the user themselves out of the attendee list. Event organizers
+    // routinely include themselves in registration CSVs, which produces
+    // self-referential briefing entries ("This is you, score 100, N/A
+    // conversation starters"). Match by email primarily (most reliable),
+    // with a fullName fallback for CSVs that omit email columns.
+    const userEmail = (userDoc.email || decodedToken.email || '').toLowerCase().trim();
+    const userFullNameNormalized = userDoc.displayName
+      ? normalizeNameForMatch(userDoc.displayName)
+      : '';
+    const filteredAttendees = attendees.filter(att => {
+      const attEmail = (att as any).email?.toLowerCase().trim();
+      if (userEmail && attEmail && attEmail === userEmail) return false;
+      if (userFullNameNormalized && att.name) {
+        if (normalizeNameForMatch(att.name) === userFullNameNormalized) return false;
+      }
+      return true;
+    });
+    const droppedSelfCount = attendees.length - filteredAttendees.length;
+    if (droppedSelfCount > 0) {
+      console.log(`[prebrief] Filtered out ${droppedSelfCount} self-reference(s) from attendee list`);
+    }
+
     // Reflections Match persona block (empty string if not connected) — adds
     // active themes, emerging interests, and expertise so attendee relevance
     // scoring reflects what the user genuinely cares about today.
@@ -152,7 +174,7 @@ export async function POST(req: Request) {
     });
 
     // Bucket attendees into mapped input objects
-    const mappedAttendeesToProcess = attendees.map(att => {
+    const mappedAttendeesToProcess = filteredAttendees.map(att => {
       const match = networkByName.get(normalizeNameForMatch(att.name || ''));
       return {
         name: att.name || 'Unknown',
