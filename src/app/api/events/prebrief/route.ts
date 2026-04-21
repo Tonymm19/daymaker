@@ -72,7 +72,7 @@ export async function POST(req: Request) {
     // 1. Fetch User Data
     const userRef = adminDb.collection('users').doc(uid);
     const userDocRef = await userRef.get();
-    
+
     if (!userDocRef.exists) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -115,9 +115,9 @@ export async function POST(req: Request) {
       : '';
     const currentGoalBlock = currentGoal || seekingLabel
       ? `\n        The user's current focus: ${[
-          currentGoal && `Current Goal — ${currentGoal}`,
-          seekingLabel && `Seeking — ${seekingLabel}`,
-        ].filter(Boolean).join('. ')}. Weight this short-horizon need heavily when scoring relevance.`
+        currentGoal && `Current Goal — ${currentGoal}`,
+        seekingLabel && `Seeking — ${seekingLabel}`,
+      ].filter(Boolean).join('. ')}. Weight this short-horizon need heavily when scoring relevance.`
       : '';
 
     // Reflections Match persona block (empty string if not connected) — adds
@@ -191,7 +191,7 @@ export async function POST(req: Request) {
     // (40K/min) — each batch uses ~7K output tokens, so 3 concurrent =
     // ~21K in flight, comfortably under 40K/min with headroom for
     // retries.
-    const CONCURRENCY_LIMIT = 1;
+    const CONCURRENCY_LIMIT = 3;
 
     async function processBatch(startIndex: number): Promise<any[]> {
       const batchFull = mappedAttendeesToProcess.slice(startIndex, startIndex + BATCH_SIZE);
@@ -370,10 +370,10 @@ ${rmBlock}${descriptionBlock}${urlsBlock}
 
       const limitsNow = new Date();
       const limitsMonthStr = `${limitsNow.getFullYear()}-${(limitsNow.getMonth() + 1).toString().padStart(2, '0')}`;
-      
+
       let newEventCount = data.currentMonthEvents || 0;
       if (data.currentMonthString !== limitsMonthStr) {
-        newEventCount = 1; 
+        newEventCount = 1;
       } else {
         newEventCount += 1;
       }
