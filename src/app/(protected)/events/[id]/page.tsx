@@ -8,7 +8,7 @@ import { getDb } from '@/lib/firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
 import type { EventBriefing, EventAttendee } from '@/lib/types';
 
-type FilterState = 'All' | 'Must Meet' | 'Worth Meeting' | 'Your Anchors' | 'New Connections';
+type FilterState = 'All' | 'Must Meet' | 'Worth Meeting' | 'Your Anchors' | 'Not in Network';
 
 export default function EventDetailPage() {
   const router = useRouter();
@@ -74,7 +74,7 @@ export default function EventDetailPage() {
     filteredAttendees = filteredAttendees.filter(a => a.connectionType === 'worth_meeting');
   } else if (filter === 'Your Anchors') {
     filteredAttendees = filteredAttendees.filter(a => a.isInNetwork);
-  } else if (filter === 'New Connections') {
+  } else if (filter === 'Not in Network') {
     filteredAttendees = filteredAttendees.filter(a => !a.isInNetwork);
   }
 
@@ -121,7 +121,7 @@ export default function EventDetailPage() {
 
       {/* Filter Tabs */}
       <div className="filter-tabs" style={{ display: 'flex', gap: '8px', marginBottom: '24px', flexWrap: 'wrap' }}>
-        {(['All', 'Must Meet', 'Worth Meeting', 'Your Anchors', 'New Connections'] as FilterState[]).map(f => (
+        {(['All', 'Must Meet', 'Worth Meeting', 'Your Anchors', 'Not in Network'] as FilterState[]).map(f => (
           <button
             key={f}
             onClick={() => setFilter(f)}
