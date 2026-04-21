@@ -733,16 +733,35 @@ export default function EventsPage() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Look up a value from a CSV row by trying multiple header
+    // candidates. Matches are case-insensitive and whitespace-
+    // tolerant, so "Company Name", "company_name", and " Company "
+    // all resolve to the same column.
+    const pickField = (row: Record<string, string>, candidates: string[]): string => {
+      const normalize = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, '');
+      const normalizedRow: Record<string, string> = {};
+      for (const key of Object.keys(row)) {
+        normalizedRow[normalize(key)] = row[key];
+      }
+      for (const candidate of candidates) {
+        const v = normalizedRow[normalize(candidate)];
+        if (v && v.trim()) return v.trim();
+      }
+      return '';
+    };
     Papa.parse(file, {
       header: true, skipEmptyLines: true,
       complete: (results) => {
         const rows = results.data as Record<string, string>[];
         const mappedText = rows.map(row => {
-          const name = row['Name'] || row['First Name'] || row['Full Name'];
-          const company = row['Company'] || row['Organization'];
-          const title = row['Title'] || row['Position'];
+          const name = pickField(row, ['Name', 'Full Name', 'First Name']);
+          const company = pickField(row, ['Company', 'Company Name', 'Organization', 'Org', 'Firm']);
+          const title = pickField(row, ['Title', 'Job Title', 'Position', 'Role']);
+          const email = pickField(row, ['Email', 'Email Address', 'E-mail']);
           if (!name) return null;
-          return [name, company, title].filter(Boolean).join(',');
+          // Include email when present — downstream parseAttendeeText treats
+          // extra comma-separated fields as metadata and won't break.
+          return [name, company, title, email].filter(Boolean).join(',');
         }).filter(Boolean).join('\n');
         setAttendeeText(prev => prev ? `${prev}\n${mappedText}` : mappedText);
       }
