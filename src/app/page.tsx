@@ -52,24 +52,34 @@ export default function LandingPage() {
         .landing-v2 .lv2-hero-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 64px; align-items: center; }
         .landing-v2 .lv2-hero-h1 { font-size: 52px; line-height: 1.08; letter-spacing: -1.2px; }
         .landing-v2 .lv2-nav-links { display: flex; align-items: center; gap: 28px; }
-        .landing-v2 .lv2-shell { padding: 0 48px; }
+        .landing-v2 .lv2-shell { padding-left: 48px; padding-right: 48px; }
+        .landing-v2 .lv2-sec-pad { padding-top: 80px; padding-bottom: 80px; }
+        .landing-v2 .lv2-cta-pad { padding-top: 96px; padding-bottom: 96px; }
         .landing-v2 .lv2-sec2-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
         .landing-v2 .lv2-sec2-h2 { font-size: 36px; line-height: 1.15; letter-spacing: -0.8px; }
         .landing-v2 .lv2-sec3-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
         .landing-v2 .lv2-sec4-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
         .landing-v2 .lv2-sec5-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+        .landing-v2 .lv2-sec6-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
         .landing-v2 .lv2-h2-large { font-size: 36px; line-height: 1.15; letter-spacing: -0.8px; }
+        .landing-v2 .lv2-final-h2 { font-size: 42px; line-height: 1.15; letter-spacing: -0.8px; }
         @media (max-width: 768px) {
           .landing-v2 .lv2-hero-grid { grid-template-columns: 1fr; gap: 40px; }
           .landing-v2 .lv2-hero-h1 { font-size: 36px; letter-spacing: -0.6px; }
           .landing-v2 .lv2-nav-textlinks { display: none; }
-          .landing-v2 .lv2-shell { padding: 0 20px; }
+          .landing-v2 .lv2-shell { padding-left: 20px; padding-right: 20px; }
+          .landing-v2 .lv2-sec-pad { padding-top: 64px; padding-bottom: 64px; }
+          .landing-v2 .lv2-cta-pad { padding-top: 64px; padding-bottom: 64px; }
           .landing-v2 .lv2-sec2-grid { grid-template-columns: 1fr; gap: 24px; }
           .landing-v2 .lv2-sec2-h2 { font-size: 28px; letter-spacing: -0.5px; }
           .landing-v2 .lv2-sec3-grid { grid-template-columns: 1fr; }
           .landing-v2 .lv2-sec4-grid { grid-template-columns: 1fr; gap: 40px; }
           .landing-v2 .lv2-sec5-grid { grid-template-columns: 1fr; gap: 32px; }
+          .landing-v2 .lv2-sec6-grid { grid-template-columns: 1fr; }
           .landing-v2 .lv2-h2-large { font-size: 28px; letter-spacing: -0.5px; }
+          .landing-v2 .lv2-final-h2 { font-size: 30px; letter-spacing: -0.5px; }
+          .landing-v2 .lv2-footer-row { flex-direction: column; align-items: center; text-align: center; gap: 12px; }
+          .landing-v2 .lv2-footer-links { gap: 16px; }
         }
       `}</style>
 
@@ -343,10 +353,9 @@ export default function LandingPage() {
 
       {/* ── Section 2: Two trigger moments ─────────────────── */}
       <section
-        className="lv2-shell"
+        className="lv2-shell lv2-sec-pad"
         style={{
           background: C.surfaceAlt,
-          padding: '80px 48px',
         }}
       >
         <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
@@ -574,10 +583,9 @@ export default function LandingPage() {
 
       {/* ── Section 3: Use Cases Grid ─────────────────────── */}
       <section
-        className="lv2-shell"
+        className="lv2-shell lv2-sec-pad"
         style={{
           background: C.bg,
-          padding: '80px 48px',
         }}
       >
         <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
@@ -642,10 +650,9 @@ export default function LandingPage() {
 
       {/* ── Section 4: How It Works ───────────────────────── */}
       <section
-        className="lv2-shell"
+        className="lv2-shell lv2-sec-pad"
         style={{
           background: C.surfaceAlt,
-          padding: '80px 48px',
           borderTop: '1px solid #2a1f1a',
           borderBottom: '1px solid #2a1f1a',
         }}
@@ -703,10 +710,9 @@ export default function LandingPage() {
 
       {/* ── Section 5: Deep Dive Callout ──────────────────── */}
       <section
-        className="lv2-shell"
+        className="lv2-shell lv2-sec-pad"
         style={{
           background: C.bg,
-          padding: '80px 48px',
         }}
       >
         <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
@@ -841,17 +847,194 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Section 6: Trust ──────────────────────────────── */}
+      <section
+        className="lv2-shell lv2-sec-pad"
+        style={{
+          background: C.surfaceAlt,
+          borderTop: '1px solid #2a1f1a',
+          borderBottom: '1px solid #2a1f1a',
+        }}
+      >
+        <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '2px',
+                textTransform: 'uppercase',
+                color: C.accent,
+                marginBottom: '16px',
+              }}
+            >
+              Built on trust
+            </div>
+            <h2
+              className="lv2-h2-large"
+              style={{
+                fontFamily: SERIF,
+                fontWeight: 400,
+                color: C.text,
+                margin: '0 auto',
+                maxWidth: '720px',
+              }}
+            >
+              Your network is yours.{' '}
+              <span style={{ fontStyle: 'italic', color: C.accent }}>Period.</span>
+            </h2>
+          </div>
+
+          <div className="lv2-sec6-grid">
+            <TrustCard
+              title="Your data stays yours"
+              body="Your contacts never enter a shared pool. We don't sell your data, don't share it with other users, don't sell to third parties. One user, one private index."
+            />
+            <TrustCard
+              title="LinkedIn-compliant"
+              body="Daymaker works with LinkedIn's official data export tool. No scraping, no violations, no TOS grey areas. What you download is what we use."
+            />
+            <TrustCard
+              title="Built by Ignitia-AI"
+              body="A real company with a legal, governance, and engineering team. You can talk to the people who built it. We answer our emails."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Section 7: FAQ ────────────────────────────────── */}
+      <section
+        className="lv2-shell lv2-sec-pad"
+        style={{ background: C.bg }}
+      >
+        <div style={{ maxWidth: '780px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '2px',
+                textTransform: 'uppercase',
+                color: C.accent,
+                marginBottom: '16px',
+              }}
+            >
+              Questions, answered
+            </div>
+            <h2
+              className="lv2-h2-large"
+              style={{
+                fontFamily: SERIF,
+                fontWeight: 400,
+                color: C.text,
+                margin: 0,
+              }}
+            >
+              The things{' '}
+              <span style={{ fontStyle: 'italic', color: C.accent }}>
+                everyone asks first.
+              </span>
+            </h2>
+          </div>
+
+          <div>
+            <FaqItem
+              first
+              q="Do I need LinkedIn Premium?"
+              a="No. Daymaker works with the free LinkedIn account and the standard data export every LinkedIn user has access to."
+            />
+            <FaqItem
+              q="Does Daymaker scrape LinkedIn?"
+              a="No. You export your connections using LinkedIn's official tool, and we build your index from that. We never touch LinkedIn directly."
+            />
+            <FaqItem
+              q="How does my data stay private?"
+              a="Your network lives in a per-user encrypted index in our database. Other Daymaker users can't see your contacts. We don't sell your data, share it, or use it to train AI models."
+            />
+            <FaqItem
+              q="What happens if I delete my account?"
+              a="Your entire index — contacts, queries, briefings — is permanently deleted. We keep no copies and can't recover anything after."
+            />
+            <FaqItem
+              q="Isn't this just ChatGPT for LinkedIn?"
+              a="ChatGPT has no idea who's in your network. Daymaker is purpose-built to read, understand, and query your specific LinkedIn contacts — with memory, context, and event-aware workflows ChatGPT doesn't have."
+            />
+            <FaqItem
+              last
+              q="Can I cancel anytime?"
+              a={'Yes. Monthly plan, no commitment. Cancel from your settings. No retention emails, no "are you sure" loops.'}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Section 8: Final CTA ──────────────────────────── */}
+      <section
+        className="lv2-shell lv2-cta-pad"
+        style={{
+          background: C.surfaceAlt,
+          borderTop: '1px solid #2a1f1a',
+        }}
+      >
+        <div style={{ maxWidth: '720px', margin: '0 auto', textAlign: 'center' }}>
+          <h2
+            className="lv2-final-h2"
+            style={{
+              fontFamily: SERIF,
+              fontWeight: 400,
+              color: C.text,
+              margin: '0 0 18px 0',
+            }}
+          >
+            Your network is already strong.{' '}
+            <span style={{ fontStyle: 'italic', color: C.accent }}>
+              Let&rsquo;s put it to use.
+            </span>
+          </h2>
+          <p
+            style={{
+              fontSize: '15px',
+              lineHeight: 1.6,
+              color: C.text2,
+              margin: '0 0 32px 0',
+            }}
+          >
+            Two minutes to set up. No credit card. You&rsquo;ll know if it&rsquo;s for
+            you within a single query.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+            <Link
+              href="/signup"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '14px 32px',
+                borderRadius: '6px',
+                background: C.accent,
+                color: C.bg,
+                fontSize: '14px',
+                fontWeight: 600,
+                letterSpacing: '-0.1px',
+              }}
+            >
+              Try it free
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* ── Footer ───────────────────────────────────────────── */}
       <footer
-        className="lv2-shell"
+        className="lv2-shell lv2-footer"
         style={{
-          marginTop: '40px',
-          padding: '40px 48px',
+          paddingTop: '40px',
+          paddingBottom: '40px',
           background: C.surfaceAlt,
           borderTop: `1px solid ${C.borderNav}`,
         }}
       >
         <div
+          className="lv2-footer-row"
           style={{
             maxWidth: '1080px',
             margin: '0 auto',
@@ -868,7 +1051,10 @@ export default function LandingPage() {
               Daymaker Connect · Built by {BRAND.company}
             </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '22px', fontSize: '12px', color: C.text3 }}>
+          <div
+            className="lv2-footer-links"
+            style={{ display: 'flex', alignItems: 'center', gap: '22px', fontSize: '12px', color: C.text3 }}
+          >
             <Link href="/privacy">Privacy</Link>
             <Link href="/terms">Terms</Link>
             <a href={`mailto:support@${BRAND.domain}`}>Contact</a>
@@ -1191,6 +1377,68 @@ function OpportunityCard({ text }: { text: string }) {
       }}
     >
       {text}
+    </div>
+  );
+}
+
+function TrustCard({ title, body }: { title: string; body: string }) {
+  return (
+    <div
+      style={{
+        background: C.surface,
+        border: `1px solid ${C.border}`,
+        borderRadius: '10px',
+        padding: '26px',
+      }}
+    >
+      <h3
+        style={{
+          fontFamily: SERIF,
+          fontSize: '20px',
+          fontWeight: 400,
+          color: C.text,
+          margin: '0 0 10px 0',
+        }}
+      >
+        {title}
+      </h3>
+      <p style={{ fontSize: '12px', lineHeight: 1.65, color: C.text2, margin: 0 }}>
+        {body}
+      </p>
+    </div>
+  );
+}
+
+function FaqItem({
+  q,
+  a,
+  first,
+  last,
+}: {
+  q: string;
+  a: string;
+  first?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        paddingTop: first ? 0 : '20px',
+        paddingBottom: '20px',
+        borderBottom: last ? 'none' : `1px solid ${C.border}`,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: SERIF,
+          fontSize: '17px',
+          color: C.text,
+          margin: '0 0 8px 0',
+        }}
+      >
+        {q}
+      </div>
+      <div style={{ fontSize: '13px', lineHeight: 1.6, color: C.text2 }}>{a}</div>
     </div>
   );
 }
