@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/firebase/AuthContext';
 import { useUser } from '@/lib/hooks/useUser';
 import { getDb } from '@/lib/firebase/config';
+import { getAuth } from 'firebase/auth';
 import { doc, getDoc, collection, getDocs, orderBy, query } from 'firebase/firestore';
 import type { MonthlyBriefing, Contact } from '@/lib/types';
 import Link from 'next/link';
@@ -80,9 +81,13 @@ export default function BriefingPage() {
   const handleGenerate = async () => {
     setIsGenerating(true);
     try {
+      const token = await getAuth().currentUser?.getIdToken();
       const res = await fetch('/api/briefing/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ month: monthString })
       });
       const data = await res.json();
