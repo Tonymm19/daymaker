@@ -213,7 +213,7 @@ export default function LandingPage() {
                   letterSpacing: '-0.1px',
                 }}
               >
-                Try it free
+                Try it Free
               </Link>
             </div>
 
@@ -892,7 +892,7 @@ export default function LandingPage() {
             />
             <TrustCard
               title="LinkedIn-compliant"
-              body="Daymaker works with LinkedIn's official data export tool. No scraping, no violations, no TOS grey areas. What you download is what we use."
+              body="Daymaker works with LinkedIn's official data export tool. No scraping, no policy violations, no workarounds. What you download is what we use."
             />
             <TrustCard
               title="Built by Ignitia-AI"
@@ -1017,7 +1017,7 @@ export default function LandingPage() {
                 letterSpacing: '-0.1px',
               }}
             >
-              Try it free
+              Try it Free
             </Link>
           </div>
         </div>
