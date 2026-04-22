@@ -53,11 +53,15 @@ export default function LandingPage() {
         .landing-v2 .lv2-hero-h1 { font-size: 52px; line-height: 1.08; letter-spacing: -1.2px; }
         .landing-v2 .lv2-nav-links { display: flex; align-items: center; gap: 28px; }
         .landing-v2 .lv2-shell { padding: 0 48px; }
+        .landing-v2 .lv2-sec2-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+        .landing-v2 .lv2-sec2-h2 { font-size: 36px; line-height: 1.15; letter-spacing: -0.8px; }
         @media (max-width: 768px) {
           .landing-v2 .lv2-hero-grid { grid-template-columns: 1fr; gap: 40px; }
           .landing-v2 .lv2-hero-h1 { font-size: 36px; letter-spacing: -0.6px; }
           .landing-v2 .lv2-nav-textlinks { display: none; }
           .landing-v2 .lv2-shell { padding: 0 20px; }
+          .landing-v2 .lv2-sec2-grid { grid-template-columns: 1fr; gap: 24px; }
+          .landing-v2 .lv2-sec2-h2 { font-size: 28px; letter-spacing: -0.5px; }
         }
       `}</style>
 
@@ -329,6 +333,237 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Section 2: Two trigger moments ─────────────────── */}
+      <section
+        className="lv2-shell"
+        style={{
+          background: C.surfaceAlt,
+          padding: '80px 48px',
+        }}
+      >
+        <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
+          {/* Centered headline block */}
+          <div style={{ textAlign: 'center', marginBottom: '56px' }}>
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '2px',
+                textTransform: 'uppercase',
+                color: C.accent,
+                marginBottom: '16px',
+              }}
+            >
+              Two moments worth catching
+            </div>
+            <h2
+              className="lv2-sec2-h2"
+              style={{
+                fontFamily: SERIF,
+                fontWeight: 400,
+                color: C.text,
+                margin: '0 auto',
+                maxWidth: '720px',
+              }}
+            >
+              Whether a question just came up{' '}
+              <span style={{ fontStyle: 'italic', color: C.accent }}>
+                or an event is coming up
+              </span>
+              , your network already has the answer.
+            </h2>
+          </div>
+
+          {/* Two-column grid */}
+          <div className="lv2-sec2-grid">
+            {/* Left — A question just came up */}
+            <div>
+              <div
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  letterSpacing: '2px',
+                  textTransform: 'uppercase',
+                  color: C.text3,
+                  marginBottom: '10px',
+                }}
+              >
+                A question just came up
+              </div>
+              <h3
+                style={{
+                  fontFamily: SERIF,
+                  fontSize: '22px',
+                  fontWeight: 400,
+                  lineHeight: 1.25,
+                  color: C.text,
+                  margin: '0 0 10px 0',
+                }}
+              >
+                Ask anything. Get people, not articles.
+              </h3>
+              <p
+                style={{
+                  fontSize: '13px',
+                  lineHeight: 1.6,
+                  color: C.text2,
+                  margin: '0 0 20px 0',
+                }}
+              >
+                Who might advise your board, who worked at a specific company, who moved to
+                your city &mdash; Daymaker knows your network deeply enough to answer with
+                names, context, and a reason.
+              </p>
+
+              {/* Product card */}
+              <div
+                style={{
+                  background: C.surface,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: '8px',
+                  padding: '14px',
+                }}
+              >
+                {/* Query bar */}
+                <div
+                  style={{
+                    background: C.bg,
+                    borderRadius: '6px',
+                    padding: '10px 12px',
+                    marginBottom: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <span style={{ color: C.accent, fontSize: '13px' }}>→</span>
+                  <span
+                    style={{
+                      fontFamily: SERIF,
+                      fontStyle: 'italic',
+                      fontSize: '13px',
+                      color: C.text,
+                    }}
+                  >
+                    Who in my network might want to join an advisory board?
+                  </span>
+                </div>
+
+                <QueryResultCard
+                  initials="SP"
+                  name="Sarah Patel"
+                  role="Former CRO · Kestrel Analytics"
+                  subtext="Between roles after 7 years scaling SaaS revenue teams. Actively looking for 1-2 advisor seats."
+                />
+                <QueryResultCard
+                  initials="EM"
+                  name="Evan Marsh"
+                  role="Partner · Hillfield Ventures"
+                  subtext="Writes regularly on marketplace go-to-market. Formally advises 2 of your portfolio companies."
+                />
+                <QueryResultCard
+                  initials="LO"
+                  name="Linda Ojo"
+                  role="Former VP Product · Clearspring"
+                  subtext="Recently exited (acquisition by Optiv). Has advised 4 early-stage founders you know."
+                  last
+                />
+              </div>
+            </div>
+
+            {/* Right — An event is coming up */}
+            <div>
+              <div
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  letterSpacing: '2px',
+                  textTransform: 'uppercase',
+                  color: C.text3,
+                  marginBottom: '10px',
+                }}
+              >
+                An event is coming up
+              </div>
+              <h3
+                style={{
+                  fontFamily: SERIF,
+                  fontSize: '22px',
+                  fontWeight: 400,
+                  lineHeight: 1.25,
+                  color: C.text,
+                  margin: '0 0 10px 0',
+                }}
+              >
+                Read the room before you walk in.
+              </h3>
+              <p
+                style={{
+                  fontSize: '13px',
+                  lineHeight: 1.6,
+                  color: C.text2,
+                  margin: '0 0 20px 0',
+                }}
+              >
+                Upload the attendee list. Get a scored briefing on every person &mdash; who
+                you already know, who to seek out, and exactly what to say.
+              </p>
+
+              {/* Event product card */}
+              <div
+                style={{
+                  background: C.surface,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: '8px',
+                  padding: '14px',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: SERIF,
+                    fontSize: '13px',
+                    color: C.text,
+                    margin: 0,
+                  }}
+                >
+                  Private VC Mixer · Menlo Park
+                </div>
+                <div
+                  style={{
+                    fontSize: '10px',
+                    color: C.muted,
+                    marginTop: '2px',
+                    marginBottom: '12px',
+                  }}
+                >
+                  Thu, May 8 · 89 confirmed
+                </div>
+
+                <EventAttendeeCard
+                  score="95"
+                  scoreBg={C.accent}
+                  scoreColor={C.bg}
+                  name="Paulina Xu"
+                  role="CEO @ Agentic Fabriq"
+                  roleColor={C.accent}
+                  rightText="MUST MEET"
+                />
+                <div style={{ height: '6px' }} />
+                <EventAttendeeCard
+                  score="70"
+                  scoreBg="#2a1f1a"
+                  scoreColor={C.text}
+                  name="Sameer Nadkarni"
+                  role="Atlas Technology Group"
+                  roleColor={C.text2}
+                  rightPill="In network"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── Footer ───────────────────────────────────────────── */}
       <footer
         className="lv2-shell"
@@ -455,6 +690,134 @@ function SuggestionCard({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function QueryResultCard({
+  initials,
+  name,
+  role,
+  subtext,
+  last,
+}: {
+  initials: string;
+  name: string;
+  role: string;
+  subtext: string;
+  last?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        background: C.bg,
+        borderRadius: '6px',
+        padding: '10px',
+        marginBottom: last ? 0 : '6px',
+        display: 'flex',
+        gap: '10px',
+        alignItems: 'flex-start',
+      }}
+    >
+      <div
+        style={{
+          flex: '0 0 28px',
+          width: 28,
+          height: 28,
+          borderRadius: '4px',
+          background: C.accent,
+          color: C.bg,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '11px',
+          fontWeight: 700,
+        }}
+      >
+        {initials}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: SERIF, fontSize: '12px', color: C.text }}>{name}</div>
+        <div style={{ fontSize: '10px', color: C.accent }}>{role}</div>
+        <div style={{ fontSize: '10px', color: C.text2, lineHeight: 1.5, marginTop: '4px' }}>
+          {subtext}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EventAttendeeCard({
+  score,
+  scoreBg,
+  scoreColor,
+  name,
+  role,
+  roleColor,
+  rightText,
+  rightPill,
+}: {
+  score: string;
+  scoreBg: string;
+  scoreColor: string;
+  name: string;
+  role: string;
+  roleColor: string;
+  rightText?: string;
+  rightPill?: string;
+}) {
+  return (
+    <div
+      style={{
+        background: C.bg,
+        borderRadius: '6px',
+        padding: '10px',
+        display: 'flex',
+        gap: '10px',
+        alignItems: 'center',
+      }}
+    >
+      <div
+        style={{
+          flex: '0 0 28px',
+          width: 28,
+          height: 28,
+          borderRadius: '4px',
+          background: scoreBg,
+          color: scoreColor,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '11px',
+          fontWeight: 700,
+        }}
+      >
+        {score}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: SERIF, fontSize: '12px', color: C.text }}>{name}</div>
+        <div style={{ fontSize: '10px', color: roleColor }}>{role}</div>
+      </div>
+      {rightText && (
+        <span style={{ fontSize: '9px', color: C.text3, whiteSpace: 'nowrap' }}>
+          {rightText}
+        </span>
+      )}
+      {rightPill && (
+        <span
+          style={{
+            padding: '2px 6px',
+            borderRadius: '9px',
+            background: C.accentDim,
+            color: C.accent,
+            border: `1px solid ${C.accent}`,
+            fontSize: '9px',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {rightPill}
+        </span>
+      )}
     </div>
   );
 }
