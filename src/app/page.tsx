@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { BRAND } from '@/lib/brand.config';
 
-// Warm dusk editorial palette — scoped to this page via inline styles so
+// Warm dusk editorial palette, scoped to this page via inline styles so
 // the logged-in product's navy theme is unaffected.
 const C = {
   bg: '#1a1310',
@@ -29,9 +29,9 @@ function SunMark({ size = 22 }: { size?: number }) {
 }
 
 export const metadata = {
-  title: 'Daymaker Connect — Make your network work for you',
+  title: 'Daymaker Connect: Make your network work for you',
   description:
-    "Daymaker reads your entire LinkedIn network and helps you find the right people in seconds — for events, outreach, fundraising, intros, or anything else worth asking.",
+    "Daymaker reads your entire LinkedIn network and helps you find the right people in seconds, for events, outreach, fundraising, intros, or anything else worth asking.",
 };
 
 export default function LandingPage() {
@@ -46,7 +46,7 @@ export default function LandingPage() {
         WebkitFontSmoothing: 'antialiased',
       }}
     >
-      {/* Scoped responsive rules — kept minimal, targets only descendants of .landing-v2 */}
+      {/* Scoped responsive rules, kept minimal; targets only descendants of .landing-v2 */}
       <style>{`
         .landing-v2 a { color: inherit; text-decoration: none; }
         .landing-v2 .lv2-hero-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 64px; align-items: center; }
@@ -154,7 +154,7 @@ export default function LandingPage() {
           className="lv2-hero-grid"
           style={{ maxWidth: '1080px', margin: '0 auto' }}
         >
-          {/* Left column — copy */}
+          {/* Left column: copy */}
           <div>
             <div
               style={{
@@ -186,7 +186,7 @@ export default function LandingPage() {
 
             <p
               style={{
-                fontSize: '17px',
+                fontSize: '18px',
                 lineHeight: 1.55,
                 color: C.text2,
                 maxWidth: '540px',
@@ -194,7 +194,7 @@ export default function LandingPage() {
               }}
             >
               Daymaker reads your entire LinkedIn network and helps you find the right people
-              in seconds &mdash; for events, outreach, fundraising, intros, or anything else worth
+              in seconds, for events, outreach, fundraising, intros, or anything else worth
               asking.
             </p>
 
@@ -220,7 +220,7 @@ export default function LandingPage() {
             <div
               style={{
                 marginTop: '18px',
-                fontSize: '12px',
+                fontSize: '13px',
                 color: C.text3,
               }}
             >
@@ -228,7 +228,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Right column — product preview card */}
+          {/* Right column: product preview card */}
           <div style={{ position: 'relative' }}>
             <div
               style={{
@@ -312,13 +312,13 @@ export default function LandingPage() {
                   initials="JW"
                   name="Jamie Walker"
                   meta="VP Product · Northwind Pay"
-                  note="You collaborated on a fintech report in 2023. She just posted about launching a new payments initiative — worth a note."
+                  note="You collaborated on a fintech report in 2023. She just posted about launching a new payments initiative. Worth a note."
                 />
                 <SuggestionCard
                   initials="MC"
                   name="Marcus Chen"
                   meta="Founder · Resolute Robotics"
-                  note="You met at Collision 2024. His startup just raised Series A — good moment to congratulate and catch up."
+                  note="You met at Collision 2024. His startup just raised Series A. Good moment to congratulate and catch up."
                 />
                 <SuggestionCard
                   initials="PS"
@@ -393,7 +393,7 @@ export default function LandingPage() {
 
           {/* Two-column grid */}
           <div className="lv2-sec2-grid">
-            {/* Left — A question just came up */}
+            {/* Left: A question just came up */}
             <div>
               <div
                 style={{
@@ -410,7 +410,7 @@ export default function LandingPage() {
               <h3
                 style={{
                   fontFamily: SERIF,
-                  fontSize: '22px',
+                  fontSize: '26px',
                   fontWeight: 400,
                   lineHeight: 1.25,
                   color: C.text,
@@ -421,15 +421,15 @@ export default function LandingPage() {
               </h3>
               <p
                 style={{
-                  fontSize: '13px',
+                  fontSize: '16px',
                   lineHeight: 1.6,
                   color: C.text2,
                   margin: '0 0 20px 0',
                 }}
               >
                 Who might advise your board, who worked at a specific company, who moved to
-                your city &mdash; Daymaker knows your network deeply enough to answer with
-                names, context, and a reason.
+                your city. Daymaker knows your network deeply enough to answer with names,
+                context, and a reason.
               </p>
 
               {/* Product card */}
@@ -488,7 +488,7 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Right — An event is coming up */}
+            {/* Right: An event is coming up */}
             <div>
               <div
                 style={{
@@ -505,7 +505,7 @@ export default function LandingPage() {
               <h3
                 style={{
                   fontFamily: SERIF,
-                  fontSize: '22px',
+                  fontSize: '26px',
                   fontWeight: 400,
                   lineHeight: 1.25,
                   color: C.text,
@@ -516,14 +516,14 @@ export default function LandingPage() {
               </h3>
               <p
                 style={{
-                  fontSize: '13px',
+                  fontSize: '16px',
                   lineHeight: 1.6,
                   color: C.text2,
                   margin: '0 0 20px 0',
                 }}
               >
-                Upload the attendee list. Get a scored briefing on every person &mdash; who
-                you already know, who to seek out, and exactly what to say.
+                Upload the attendee list. Get a scored briefing on every person: who you
+                already know, who to seek out, and exactly what to say.
               </p>
 
               {/* Event product card */}
@@ -630,7 +630,7 @@ export default function LandingPage() {
             />
             <UseCaseCard
               question={'"Who has experience launching a healthtech SaaS?"'}
-              explanation="Find expertise for specific problems — without posting on LinkedIn and waiting."
+              explanation="Find expertise for specific problems, without posting on LinkedIn and waiting."
             />
             <UseCaseCard
               question={'"Who could introduce me to Sarah Lin at Helix?"'}
@@ -748,7 +748,7 @@ export default function LandingPage() {
               </h2>
               <p
                 style={{
-                  fontSize: '15px',
+                  fontSize: '16px',
                   lineHeight: 1.65,
                   color: C.text2,
                   margin: '0 0 24px 0',
@@ -763,7 +763,7 @@ export default function LandingPage() {
                   listStyle: 'none',
                   padding: 0,
                   margin: 0,
-                  fontSize: '12px',
+                  fontSize: '14px',
                   lineHeight: 1.7,
                   color: C.text3,
                 }}
@@ -774,7 +774,7 @@ export default function LandingPage() {
               </ul>
             </div>
 
-            {/* Right — Deep Dive product card */}
+            {/* Right: Deep Dive product card */}
             <div
               style={{
                 background: C.surface,
@@ -792,10 +792,10 @@ export default function LandingPage() {
                 }}
               >
                 <div>
-                  <div style={{ fontFamily: SERIF, fontSize: '17px', color: C.text }}>
+                  <div style={{ fontFamily: SERIF, fontSize: '19px', color: C.text }}>
                     Marcus Chen
                   </div>
-                  <div style={{ fontSize: '11px', color: C.accent, marginTop: '2px' }}>
+                  <div style={{ fontSize: '13px', color: C.accent, marginTop: '2px' }}>
                     Founder · Resolute Robotics
                   </div>
                 </div>
@@ -839,7 +839,7 @@ export default function LandingPage() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <OpportunityCard text="Your AI governance consulting maps directly to the compliance gap Marcus mentioned in his Series A pitch." />
-                <OpportunityCard text="You share 7 mutual connections in robotics — 3 could make a warm intro if useful." />
+                <OpportunityCard text="You share 7 mutual connections in robotics. 3 could make a warm intro if useful." />
                 <OpportunityCard text="He's speaking at IMG Builders in June. Consider being in the audience." />
               </div>
             </div>
@@ -953,11 +953,11 @@ export default function LandingPage() {
             />
             <FaqItem
               q="What happens if I delete my account?"
-              a="Your entire index — contacts, queries, briefings — is permanently deleted. We keep no copies and can't recover anything after."
+              a="Your entire index, including contacts, queries, and briefings, is permanently deleted. We keep no copies and can't recover anything after."
             />
             <FaqItem
               q="Isn't this just ChatGPT for LinkedIn?"
-              a="ChatGPT has no idea who's in your network. Daymaker is purpose-built to read, understand, and query your specific LinkedIn contacts — with memory, context, and event-aware workflows ChatGPT doesn't have."
+              a="ChatGPT has no idea who's in your network. Daymaker is purpose-built to read, understand, and query your specific LinkedIn contacts, with memory, context, and event-aware workflows ChatGPT doesn't have."
             />
             <FaqItem
               last
@@ -993,7 +993,7 @@ export default function LandingPage() {
           </h2>
           <p
             style={{
-              fontSize: '15px',
+              fontSize: '17px',
               lineHeight: 1.6,
               color: C.text2,
               margin: '0 0 32px 0',
@@ -1201,8 +1201,8 @@ function QueryResultCard({
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontFamily: SERIF, fontSize: '12px', color: C.text }}>{name}</div>
-        <div style={{ fontSize: '10px', color: C.accent }}>{role}</div>
-        <div style={{ fontSize: '10px', color: C.text2, lineHeight: 1.5, marginTop: '4px' }}>
+        <div style={{ fontSize: '12px', color: C.accent }}>{role}</div>
+        <div style={{ fontSize: '12px', color: C.text2, lineHeight: 1.5, marginTop: '4px' }}>
           {subtext}
         </div>
       </div>
@@ -1259,7 +1259,7 @@ function EventAttendeeCard({
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontFamily: SERIF, fontSize: '12px', color: C.text }}>{name}</div>
-        <div style={{ fontSize: '10px', color: roleColor }}>{role}</div>
+        <div style={{ fontSize: '12px', color: roleColor }}>{role}</div>
       </div>
       {rightText && (
         <span style={{ fontSize: '9px', color: C.text3, whiteSpace: 'nowrap' }}>
@@ -1305,7 +1305,7 @@ function UseCaseCard({
         style={{
           fontFamily: SERIF,
           fontStyle: 'italic',
-          fontSize: '16px',
+          fontSize: '18px',
           lineHeight: 1.35,
           color: C.text,
           marginBottom: '10px',
@@ -1313,7 +1313,7 @@ function UseCaseCard({
       >
         {question}
       </div>
-      <div style={{ fontSize: '11px', lineHeight: 1.55, color: C.text2 }}>
+      <div style={{ fontSize: '13px', lineHeight: 1.55, color: C.text2 }}>
         {explanation}
       </div>
     </div>
@@ -1355,7 +1355,7 @@ function HowItWorksStep({
       >
         {title}
       </h3>
-      <p style={{ fontSize: '13px', lineHeight: 1.6, color: C.text2, margin: 0 }}>
+      <p style={{ fontSize: '15px', lineHeight: 1.6, color: C.text2, margin: 0 }}>
         {description}
       </p>
     </div>
@@ -1371,7 +1371,7 @@ function OpportunityCard({ text }: { text: string }) {
         borderRadius: 0,
         padding: '10px 12px',
         fontFamily: SERIF,
-        fontSize: '12px',
+        fontSize: '14px',
         lineHeight: 1.5,
         color: C.text,
       }}
@@ -1402,7 +1402,7 @@ function TrustCard({ title, body }: { title: string; body: string }) {
       >
         {title}
       </h3>
-      <p style={{ fontSize: '12px', lineHeight: 1.65, color: C.text2, margin: 0 }}>
+      <p style={{ fontSize: '14px', lineHeight: 1.65, color: C.text2, margin: 0 }}>
         {body}
       </p>
     </div>
@@ -1431,14 +1431,14 @@ function FaqItem({
       <div
         style={{
           fontFamily: SERIF,
-          fontSize: '17px',
+          fontSize: '19px',
           color: C.text,
           margin: '0 0 8px 0',
         }}
       >
         {q}
       </div>
-      <div style={{ fontSize: '13px', lineHeight: 1.6, color: C.text2 }}>{a}</div>
+      <div style={{ fontSize: '15px', lineHeight: 1.6, color: C.text2 }}>{a}</div>
     </div>
   );
 }
