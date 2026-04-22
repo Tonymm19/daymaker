@@ -55,6 +55,10 @@ export default function LandingPage() {
         .landing-v2 .lv2-shell { padding: 0 48px; }
         .landing-v2 .lv2-sec2-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
         .landing-v2 .lv2-sec2-h2 { font-size: 36px; line-height: 1.15; letter-spacing: -0.8px; }
+        .landing-v2 .lv2-sec3-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .landing-v2 .lv2-sec4-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+        .landing-v2 .lv2-sec5-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+        .landing-v2 .lv2-h2-large { font-size: 36px; line-height: 1.15; letter-spacing: -0.8px; }
         @media (max-width: 768px) {
           .landing-v2 .lv2-hero-grid { grid-template-columns: 1fr; gap: 40px; }
           .landing-v2 .lv2-hero-h1 { font-size: 36px; letter-spacing: -0.6px; }
@@ -62,6 +66,10 @@ export default function LandingPage() {
           .landing-v2 .lv2-shell { padding: 0 20px; }
           .landing-v2 .lv2-sec2-grid { grid-template-columns: 1fr; gap: 24px; }
           .landing-v2 .lv2-sec2-h2 { font-size: 28px; letter-spacing: -0.5px; }
+          .landing-v2 .lv2-sec3-grid { grid-template-columns: 1fr; }
+          .landing-v2 .lv2-sec4-grid { grid-template-columns: 1fr; gap: 40px; }
+          .landing-v2 .lv2-sec5-grid { grid-template-columns: 1fr; gap: 32px; }
+          .landing-v2 .lv2-h2-large { font-size: 28px; letter-spacing: -0.5px; }
         }
       `}</style>
 
@@ -564,6 +572,275 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Section 3: Use Cases Grid ─────────────────────── */}
+      <section
+        className="lv2-shell"
+        style={{
+          background: C.bg,
+          padding: '80px 48px',
+        }}
+      >
+        <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '2px',
+                textTransform: 'uppercase',
+                color: C.accent,
+                marginBottom: '16px',
+              }}
+            >
+              Things people ask us
+            </div>
+            <h2
+              className="lv2-h2-large"
+              style={{
+                fontFamily: SERIF,
+                fontWeight: 400,
+                color: C.text,
+                margin: '0 auto',
+                maxWidth: '720px',
+              }}
+            >
+              Your network already knows.{' '}
+              <span style={{ fontStyle: 'italic', color: C.accent }}>
+                Now you can too.
+              </span>
+            </h2>
+          </div>
+
+          <div className="lv2-sec3-grid">
+            <UseCaseCard
+              question={'"Who in my network works at Northwind Pay?"'}
+              explanation="For targeted outreach, warm intros, or figuring out who could refer you in."
+            />
+            <UseCaseCard
+              question={'"Who should I invite to Thursday\'s dinner?"'}
+              explanation="Curate guest lists from the people in your network who actually fit the room."
+            />
+            <UseCaseCard
+              question={'"Who has experience launching a healthtech SaaS?"'}
+              explanation="Find expertise for specific problems — without posting on LinkedIn and waiting."
+            />
+            <UseCaseCard
+              question={'"Who could introduce me to Sarah Lin at Helix?"'}
+              explanation="Trace the shortest warm path from your network to any target."
+            />
+            <UseCaseCard
+              question={'"Who should I target for my new consulting service?"'}
+              explanation="Marketing outreach that starts with people who already trust you."
+            />
+            <UseCaseCard
+              question={'"Which VCs in my network fund companies at my stage?"'}
+              explanation="Narrow a fundraising list to the contacts with real relevance and familiarity."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Section 4: How It Works ───────────────────────── */}
+      <section
+        className="lv2-shell"
+        style={{
+          background: C.surfaceAlt,
+          padding: '80px 48px',
+          borderTop: '1px solid #2a1f1a',
+          borderBottom: '1px solid #2a1f1a',
+        }}
+      >
+        <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '56px' }}>
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '2px',
+                textTransform: 'uppercase',
+                color: C.accent,
+                marginBottom: '16px',
+              }}
+            >
+              How it works
+            </div>
+            <h2
+              className="lv2-h2-large"
+              style={{
+                fontFamily: SERIF,
+                fontWeight: 400,
+                color: C.text,
+                margin: '0 auto',
+                maxWidth: '720px',
+              }}
+            >
+              Two minutes to set up.{' '}
+              <span style={{ fontStyle: 'italic', color: C.accent }}>
+                Everything after that is just asking.
+              </span>
+            </h2>
+          </div>
+
+          <div className="lv2-sec4-grid">
+            <HowItWorksStep
+              numeral="01"
+              title="Connect"
+              description="Download your LinkedIn connections export (LinkedIn's official tool, no scraping) and upload it. Takes about two minutes, total."
+            />
+            <HowItWorksStep
+              numeral="02"
+              title="Categorize"
+              description="Daymaker reads every profile, understands roles and industries, and quietly builds an index so you can ask questions in plain English."
+            />
+            <HowItWorksStep
+              numeral="03"
+              title="Ask anything"
+              description="Type a question the way you'd say it out loud. Get specific people with context on why they matter and how you know them."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Section 5: Deep Dive Callout ──────────────────── */}
+      <section
+        className="lv2-shell"
+        style={{
+          background: C.bg,
+          padding: '80px 48px',
+        }}
+      >
+        <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
+          <div className="lv2-sec5-grid">
+            {/* Left */}
+            <div>
+              <div
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '2px',
+                  textTransform: 'uppercase',
+                  color: C.accent,
+                  marginBottom: '16px',
+                }}
+              >
+                Deep dive
+              </div>
+              <h2
+                className="lv2-h2-large"
+                style={{
+                  fontFamily: SERIF,
+                  fontWeight: 400,
+                  lineHeight: 1.12,
+                  color: C.text,
+                  margin: '0 0 20px 0',
+                }}
+              >
+                Before the meeting,{' '}
+                <span style={{ fontStyle: 'italic', color: C.accent }}>
+                  understand the person.
+                </span>
+              </h2>
+              <p
+                style={{
+                  fontSize: '15px',
+                  lineHeight: 1.65,
+                  color: C.text2,
+                  margin: '0 0 24px 0',
+                }}
+              >
+                Pick any contact. Get a synergy analysis: where your work overlaps, where
+                your networks connect, and three concrete opportunities to collaborate.
+                Drafted in the voice of someone who knows you both.
+              </p>
+              <ul
+                style={{
+                  listStyle: 'none',
+                  padding: 0,
+                  margin: 0,
+                  fontSize: '12px',
+                  lineHeight: 1.7,
+                  color: C.text3,
+                }}
+              >
+                <li>• Mutual connection mapping</li>
+                <li>• Collaboration opportunities with context</li>
+                <li>• Drafted outreach you can actually send</li>
+              </ul>
+            </div>
+
+            {/* Right — Deep Dive product card */}
+            <div
+              style={{
+                background: C.surface,
+                border: `1px solid ${C.border}`,
+                borderRadius: '10px',
+                padding: '22px',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  marginBottom: '14px',
+                }}
+              >
+                <div>
+                  <div style={{ fontFamily: SERIF, fontSize: '17px', color: C.text }}>
+                    Marcus Chen
+                  </div>
+                  <div style={{ fontSize: '11px', color: C.accent, marginTop: '2px' }}>
+                    Founder · Resolute Robotics
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div
+                    style={{
+                      fontFamily: SERIF,
+                      fontSize: '24px',
+                      fontWeight: 500,
+                      color: C.accent,
+                      lineHeight: 1,
+                    }}
+                  >
+                    87
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '9px',
+                      letterSpacing: '0.5px',
+                      color: C.muted,
+                      marginTop: '4px',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    Synergy
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  fontSize: '11px',
+                  letterSpacing: '0.5px',
+                  color: C.muted,
+                  marginBottom: '8px',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Three opportunities
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <OpportunityCard text="Your AI governance consulting maps directly to the compliance gap Marcus mentioned in his Series A pitch." />
+                <OpportunityCard text="You share 7 mutual connections in robotics — 3 could make a warm intro if useful." />
+                <OpportunityCard text="He's speaking at IMG Builders in June. Consider being in the audience." />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── Footer ───────────────────────────────────────────── */}
       <footer
         className="lv2-shell"
@@ -818,6 +1095,102 @@ function EventAttendeeCard({
           {rightPill}
         </span>
       )}
+    </div>
+  );
+}
+
+function UseCaseCard({
+  question,
+  explanation,
+}: {
+  question: string;
+  explanation: string;
+}) {
+  return (
+    <div
+      style={{
+        background: C.surface,
+        border: `1px solid ${C.border}`,
+        borderRadius: '10px',
+        padding: '22px',
+      }}
+    >
+      <div
+        style={{
+          fontFamily: SERIF,
+          fontStyle: 'italic',
+          fontSize: '16px',
+          lineHeight: 1.35,
+          color: C.text,
+          marginBottom: '10px',
+        }}
+      >
+        {question}
+      </div>
+      <div style={{ fontSize: '11px', lineHeight: 1.55, color: C.text2 }}>
+        {explanation}
+      </div>
+    </div>
+  );
+}
+
+function HowItWorksStep({
+  numeral,
+  title,
+  description,
+}: {
+  numeral: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div>
+      <div
+        style={{
+          fontFamily: SERIF,
+          fontStyle: 'italic',
+          fontSize: '48px',
+          fontWeight: 400,
+          lineHeight: 1,
+          color: C.accent,
+          marginBottom: '16px',
+        }}
+      >
+        {numeral}
+      </div>
+      <h3
+        style={{
+          fontFamily: SERIF,
+          fontSize: '20px',
+          fontWeight: 400,
+          color: C.text,
+          margin: '0 0 10px 0',
+        }}
+      >
+        {title}
+      </h3>
+      <p style={{ fontSize: '13px', lineHeight: 1.6, color: C.text2, margin: 0 }}>
+        {description}
+      </p>
+    </div>
+  );
+}
+
+function OpportunityCard({ text }: { text: string }) {
+  return (
+    <div
+      style={{
+        background: C.bg,
+        borderLeft: `2px solid ${C.accent}`,
+        borderRadius: 0,
+        padding: '10px 12px',
+        fontFamily: SERIF,
+        fontSize: '12px',
+        lineHeight: 1.5,
+        color: C.text,
+      }}
+    >
+      {text}
     </div>
   );
 }
