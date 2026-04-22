@@ -265,6 +265,15 @@ export default function EventsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
 
+  // Filter state for CSV uploads that have a status column.
+  // null when no CSV uploaded with status, or CSV had no recognized
+  // status column.
+  const [uploadedCsvRows, setUploadedCsvRows] = useState<Record<string, string>[] | null>(null);
+  const [statusColumn, setStatusColumn] = useState<string | null>(null);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
+  const [showFilterExpanded, setShowFilterExpanded] = useState(false);
+
   // Smart URL detection state
   const [detectedUrls, setDetectedUrls] = useState<DetectedUrls>({ luma: null, eventbrite: null });
   const [lumaLoading, setLumaLoading] = useState(false);
@@ -785,42 +794,190 @@ export default function EventsPage() {
   };
 
   // ─── File upload ──────────────────────────────────────────────────
+
+  // Status column detection candidates (case-insensitive, whitespace/
+  // underscore tolerant — matches approval_status, RSVP Status, etc.)
+  const STATUS_COLUMN_CANDIDATES = [
+    'approval_status', 'rsvp_status', 'status', 'attendance', 'attending',
+  ];
+
+  // Status values that mean "this person will be there" — the default
+  // selected set when the filter auto-applies.
+  const APPROVED_STATUSES = new Set([
+    'approved', 'confirmed', 'registered', 'yes', 'going', 'attending', 'checked_in',
+  ]);
+
+  // Company field name patterns — used as fallback after explicit
+  // candidates miss. Matches Luma-style custom questions like
+  // "What organization do you represent?".
+  const COMPANY_HEURISTIC_SUBSTRINGS = ['organization', 'company', 'firm', 'employer'];
+
+  // Title/role field name patterns — fallback for Luma "primary role"
+  // and similar custom questions.
+  const TITLE_HEURISTIC_SUBSTRINGS = ['primary role', 'your role', 'role in', 'position', 'job title'];
+
+  // Detect status column in parsed rows. Returns the actual column
+  // name (preserving original casing) or null.
+  function detectStatusColumn(rows: Record<string, string>[]): string | null {
+    if (rows.length === 0) return null;
+    const normalize = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, '');
+    const candidates = STATUS_COLUMN_CANDIDATES.map(normalize);
+    for (const key of Object.keys(rows[0])) {
+      if (candidates.includes(normalize(key))) return key;
+    }
+    return null;
+  }
+
+  // Count each status value across all rows. Skips empty statuses.
+  function countStatuses(rows: Record<string, string>[], statusCol: string): Record<string, number> {
+    const counts: Record<string, number> = {};
+    for (const row of rows) {
+      const s = (row[statusCol] || '').toLowerCase().trim();
+      if (!s) continue;
+      counts[s] = (counts[s] || 0) + 1;
+    }
+    return counts;
+  }
+
+  // Field picker with two-stage matching: exact candidates first, then
+  // heuristic substring match. `heuristics` are lowercased substrings;
+  // if any appears in a key (also lowercased), that key is used.
+  function pickFieldWithHeuristics(
+    row: Record<string, string>,
+    exactCandidates: string[],
+    heuristics: string[] = []
+  ): string {
+    const normalize = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, '');
+    const normalizedRow: Record<string, string> = {};
+    for (const key of Object.keys(row)) {
+      normalizedRow[normalize(key)] = row[key];
+    }
+    // Exact match first
+    for (const candidate of exactCandidates) {
+      const v = normalizedRow[normalize(candidate)];
+      if (v && v.trim()) return v.trim();
+    }
+    // Heuristic fallback — find first key whose lowercase form
+    // contains any of the heuristic substrings
+    if (heuristics.length > 0) {
+      for (const key of Object.keys(row)) {
+        const keyLower = key.toLowerCase();
+        for (const hint of heuristics) {
+          if (keyLower.includes(hint)) {
+            const v = row[key];
+            if (v && v.trim()) return v.trim();
+          }
+        }
+      }
+    }
+    return '';
+  }
+
+  // Build attendee textarea text from parsed rows. Respects status
+  // filter when statusCol is non-null. Used both on initial upload
+  // and on filter toggle.
+  function buildAttendeeTextFromRows(
+    rows: Record<string, string>[],
+    statusCol: string | null,
+    selected: Set<string>
+  ): string {
+    return rows
+      .filter(row => {
+        if (!statusCol) return true;
+        const s = (row[statusCol] || '').toLowerCase().trim();
+        return selected.has(s);
+      })
+      .map(row => {
+        const name = pickFieldWithHeuristics(row, ['Name', 'Full Name', 'First Name']);
+        const company = pickFieldWithHeuristics(
+          row,
+          ['Company', 'Company Name', 'Organization', 'Org', 'Firm'],
+          COMPANY_HEURISTIC_SUBSTRINGS
+        );
+        const title = pickFieldWithHeuristics(
+          row,
+          ['Title', 'Job Title', 'Position', 'Role'],
+          TITLE_HEURISTIC_SUBSTRINGS
+        );
+        const email = pickFieldWithHeuristics(row, ['Email', 'Email Address', 'E-mail']);
+        if (!name) return null;
+        return [name, company, title, email].filter(Boolean).join(',');
+      })
+      .filter(Boolean)
+      .join('\n');
+  }
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // Look up a value from a CSV row by trying multiple header
-    // candidates. Matches are case-insensitive and whitespace-
-    // tolerant, so "Company Name", "company_name", and " Company "
-    // all resolve to the same column.
-    const pickField = (row: Record<string, string>, candidates: string[]): string => {
-      const normalize = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, '');
-      const normalizedRow: Record<string, string> = {};
-      for (const key of Object.keys(row)) {
-        normalizedRow[normalize(key)] = row[key];
-      }
-      for (const candidate of candidates) {
-        const v = normalizedRow[normalize(candidate)];
-        if (v && v.trim()) return v.trim();
-      }
-      return '';
-    };
+
     Papa.parse(file, {
-      header: true, skipEmptyLines: true,
+      header: true,
+      skipEmptyLines: true,
+      // Skip Luma-style title rows: if the first line has very few
+      // non-empty cells but the second line has many, the first line
+      // is a title (e.g., the event name) and the real headers are
+      // on line 2.
+      beforeFirstChunk: (chunk: string) => {
+        const lines = chunk.split(/\r?\n/);
+        if (lines.length < 2) return chunk;
+        const countNonEmpty = (line: string) =>
+          line.split(',').filter(c => c.trim().length > 0).length;
+        const firstCount = countNonEmpty(lines[0]);
+        const secondCount = countNonEmpty(lines[1]);
+        if (firstCount <= 2 && secondCount >= 5) {
+          // Drop the title row
+          return lines.slice(1).join('\n');
+        }
+        return chunk;
+      },
       complete: (results) => {
         const rows = results.data as Record<string, string>[];
-        const mappedText = rows.map(row => {
-          const name = pickField(row, ['Name', 'Full Name', 'First Name']);
-          const company = pickField(row, ['Company', 'Company Name', 'Organization', 'Org', 'Firm']);
-          const title = pickField(row, ['Title', 'Job Title', 'Position', 'Role']);
-          const email = pickField(row, ['Email', 'Email Address', 'E-mail']);
-          if (!name) return null;
-          // Include email when present — downstream parseAttendeeText treats
-          // extra comma-separated fields as metadata and won't break.
-          return [name, company, title, email].filter(Boolean).join(',');
-        }).filter(Boolean).join('\n');
-        setAttendeeText(prev => prev ? `${prev}\n${mappedText}` : mappedText);
-      }
+        const statusCol = detectStatusColumn(rows);
+
+        if (!statusCol) {
+          // No status column — behave as before, append to textarea.
+          const mappedText = buildAttendeeTextFromRows(rows, null, new Set());
+          setAttendeeText(prev => prev ? `${prev}\n${mappedText}` : mappedText);
+          setUploadedCsvRows(null);
+          setStatusColumn(null);
+          setStatusCounts({});
+          setSelectedStatuses(new Set());
+          return;
+        }
+
+        // Status column present — apply default filter.
+        const counts = countStatuses(rows, statusCol);
+        const defaultSelected = new Set(
+          Object.keys(counts).filter(s => APPROVED_STATUSES.has(s))
+        );
+        // If no statuses match the "approved" set, fall back to all
+        // (avoids silently showing zero attendees on unusual CSVs).
+        if (defaultSelected.size === 0) {
+          for (const k of Object.keys(counts)) defaultSelected.add(k);
+        }
+
+        setUploadedCsvRows(rows);
+        setStatusColumn(statusCol);
+        setStatusCounts(counts);
+        setSelectedStatuses(defaultSelected);
+
+        const filteredText = buildAttendeeTextFromRows(rows, statusCol, defaultSelected);
+        // Replace attendeeText entirely when filter is applied so the
+        // textarea reflects exactly what the filter produced.
+        setAttendeeText(filteredText);
+      },
     });
+  };
+
+  const toggleStatus = (status: string) => {
+    if (!uploadedCsvRows || !statusColumn) return;
+    const next = new Set(selectedStatuses);
+    if (next.has(status)) next.delete(status);
+    else next.add(status);
+    setSelectedStatuses(next);
+    const filteredText = buildAttendeeTextFromRows(uploadedCsvRows, statusColumn, next);
+    setAttendeeText(filteredText);
   };
 
   // ─── Organizer Outreach ───────────────────────────────────────────
@@ -1625,6 +1782,81 @@ export default function EventsPage() {
                 ) : (
                   <div style={{ fontSize: '11px', color: 'var(--orange)', marginTop: '6px', fontWeight: 500 }}>
                     Add at least one attendee to generate a briefing.
+                  </div>
+                );
+              })()}
+
+              {statusColumn && Object.keys(statusCounts).length > 0 && (() => {
+                const selectedCount = Array.from(selectedStatuses)
+                  .reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
+                const totalCount = Object.values(statusCounts).reduce((a, b) => a + b, 0);
+                return (
+                  <div style={{
+                    marginTop: '10px',
+                    padding: '10px 12px',
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                  }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => setShowFilterExpanded(v => !v)}
+                    >
+                      <div style={{ color: 'var(--text2)' }}>
+                        Filter: analyzing{' '}
+                        <span style={{ color: 'var(--orange)', fontWeight: 600 }}>
+                          {selectedCount}
+                        </span>
+                        {' '}of {totalCount} attendees
+                        <span style={{ marginLeft: '8px', color: 'var(--text2)', fontSize: '11px', opacity: 0.7 }}>
+                          (by {statusColumn})
+                        </span>
+                      </div>
+                      <span style={{ color: 'var(--text2)' }}>
+                        {showFilterExpanded ? '▾' : '▸'}
+                      </span>
+                    </div>
+
+                    {showFilterExpanded && (
+                      <div style={{
+                        marginTop: '10px',
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '8px',
+                      }}>
+                        {Object.entries(statusCounts)
+                          .sort((a, b) => b[1] - a[1])
+                          .map(([status, count]) => {
+                            const active = selectedStatuses.has(status);
+                            return (
+                              <button
+                                key={status}
+                                type="button"
+                                onClick={() => toggleStatus(status)}
+                                style={{
+                                  padding: '5px 10px',
+                                  borderRadius: '20px',
+                                  border: `1px solid ${active ? 'var(--orange)' : 'var(--border)'}`,
+                                  background: active ? 'rgba(249, 148, 30, 0.15)' : 'transparent',
+                                  color: active ? 'var(--orange)' : 'var(--text2)',
+                                  fontSize: '11px',
+                                  fontFamily: 'inherit',
+                                  cursor: 'pointer',
+                                  textTransform: 'capitalize',
+                                }}
+                              >
+                                {status} ({count})
+                              </button>
+                            );
+                          })}
+                      </div>
+                    )}
                   </div>
                 );
               })()}
