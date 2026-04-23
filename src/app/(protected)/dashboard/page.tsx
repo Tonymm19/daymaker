@@ -341,7 +341,7 @@ export default function DashboardPage() {
                   color = 'var(--green)';
                 } else {
                   label = `${days} days since last refresh`;
-                  color = days < 15 ? 'var(--green)' : days < 30 ? 'var(--blue)' : 'var(--red)';
+                  color = days <= 30 ? 'var(--green)' : days <= 60 ? 'var(--blue)' : 'var(--red)';
                 }
                 return <span style={{ fontSize: '12px', color }}>{label}</span>;
               })()}
