@@ -5,36 +5,28 @@ import HideButton from '@/components/dashboard/HideButton';
 
 const PAGE_SIZE = 50;
 
-// Non-company entries users type into the LinkedIn "company" field. Always
-// pinned to the top of the list under an "Other" heading so real companies
-// aren't buried by them when sorting by contact count.
-const THEMATIC_NAMES = new Set(
-  [
-    'Self-Employed',
-    'Self Employed',
-    'Self-employed',
-    'Freelance',
-    'Freelancer',
-    'Unemployed',
-    'Unknown Company',
-    'Stealth',
-    'Stealth Startup',
-    'Stealth Mode',
-    'Independent',
-    'Independent Contractor',
-    'Independent Consultant',
-    'Consultant',
-    'Retired',
-    'Looking for Work',
-    'Open to Work',
-    'Student',
-    'N/A',
-    'None',
-  ].map((s) => s.toLowerCase()),
-);
+// Canonical buckets for noise variants ("Freelance", "freelancer", "FREELANCE")
+// so the list shows one row per real category instead of three near-duplicates.
+// Matchers run in order; first hit wins. Real companies (anything not matching)
+// pass through unchanged.
+const UNSPECIFIED = 'Unspecified';
+const NORMALIZATION_RULES: Array<{ pattern: RegExp; bucket: string }> = [
+  { pattern: /^freelanc/i, bucket: 'Freelance' },
+  { pattern: /^independent/i, bucket: 'Independent' },
+  { pattern: /^self[-\s]?employ/i, bucket: 'Self-Employed' },
+  { pattern: /^stealth/i, bucket: 'Stealth' },
+  { pattern: /^retired$/i, bucket: 'Retired' },
+  { pattern: /^(n\/?a|none|unknown|-+|\.+)$/i, bucket: UNSPECIFIED },
+];
+const NORMALIZED_BUCKETS = new Set(NORMALIZATION_RULES.map((r) => r.bucket));
 
-function isThematic(name: string): boolean {
-  return THEMATIC_NAMES.has(name.trim().toLowerCase());
+function normalizeCompany(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return UNSPECIFIED;
+  for (const rule of NORMALIZATION_RULES) {
+    if (rule.pattern.test(trimmed)) return rule.bucket;
+  }
+  return trimmed;
 }
 
 type SortKey = 'name' | 'count';
@@ -45,15 +37,17 @@ export default function CompaniesTab({ contacts, onSelectContact, onHideContact 
   const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [sortKey, setSortKey] = useState<SortKey>('name');
+  const [showUnspecified, setShowUnspecified] = useState(false);
 
   // Group contacts strictly by their CURRENT company field. previousCompany is
   // stored for history but never used here — a contact whose company changed
-  // between imports only shows under the new company.
-  const { thematic, regular, totalCompanies } = useMemo(() => {
+  // between imports only shows under the new company. The raw company string on
+  // each contact stays untouched; normalization is applied only at group time.
+  const { thematic, regular, unspecified, totalCompanies } = useMemo(() => {
     const grouped = new Map<string, Contact[]>();
 
     contacts.forEach((contact) => {
-      const comp = contact.company?.trim() || 'Unknown Company';
+      const comp = normalizeCompany(contact.company ?? '');
       if (!grouped.has(comp)) grouped.set(comp, []);
       grouped.get(comp)!.push(contact);
     });
@@ -69,8 +63,11 @@ export default function CompaniesTab({ contacts, onSelectContact, onHideContact 
       rows = rows.filter((c) => c.name.toLowerCase().includes(lowerQ));
     }
 
-    const thematicRows = rows.filter((r) => isThematic(r.name));
-    const regularRows = rows.filter((r) => !isThematic(r.name));
+    const unspecifiedRow = rows.find((r) => r.name === UNSPECIFIED) ?? null;
+    const thematicRows = rows.filter(
+      (r) => NORMALIZED_BUCKETS.has(r.name) && r.name !== UNSPECIFIED,
+    );
+    const regularRows = rows.filter((r) => !NORMALIZED_BUCKETS.has(r.name));
 
     // Thematic section is always alphabetical — sort order doesn't really
     // apply to these catch-all buckets.
@@ -84,12 +81,16 @@ export default function CompaniesTab({ contacts, onSelectContact, onHideContact 
       return a.name.localeCompare(b.name);
     });
 
+    const total =
+      thematicRows.length + regularRows.length + (unspecifiedRow && showUnspecified ? 1 : 0);
+
     return {
       thematic: thematicRows,
       regular: regularRows,
-      totalCompanies: thematicRows.length + regularRows.length,
+      unspecified: unspecifiedRow,
+      totalCompanies: total,
     };
-  }, [contacts, debouncedQuery, sortKey]);
+  }, [contacts, debouncedQuery, sortKey, showUnspecified]);
 
   // Reset pagination when the active filter changes.
   useEffect(() => {
@@ -257,6 +258,28 @@ export default function CompaniesTab({ contacts, onSelectContact, onHideContact 
         <button type="button" onClick={() => setSortKey('count')} style={sortBtnStyle(sortKey === 'count')}>
           Contact Count
         </button>
+        {unspecified && (
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              marginLeft: 'auto',
+              fontSize: '12px',
+              color: 'var(--text2)',
+              cursor: 'pointer',
+              userSelect: 'none',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={showUnspecified}
+              onChange={(e) => setShowUnspecified(e.target.checked)}
+              style={{ cursor: 'pointer' }}
+            />
+            Show unspecified ({unspecified.count})
+          </label>
+        )}
       </div>
 
       <div className="results-meta" style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--muted)' }}>
@@ -288,6 +311,13 @@ export default function CompaniesTab({ contacts, onSelectContact, onHideContact 
         )}
 
         {visibleRegular.map(renderCompanyRow)}
+
+        {unspecified && showUnspecified && (
+          <>
+            <div style={{ height: '1px', background: 'var(--border)', margin: '8px 0' }} />
+            {renderCompanyRow(unspecified)}
+          </>
+        )}
 
         {totalCompanies === 0 && (
           <div style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)' }}>
