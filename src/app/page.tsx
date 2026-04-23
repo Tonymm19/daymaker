@@ -966,7 +966,7 @@ export default function LandingPage() {
             <FaqItem
               last
               q="Can I cancel anytime?"
-              a={'Yes. Monthly plan, no commitment. Cancel from your settings. No retention emails, no "are you sure" loops.'}
+              a={'Yes. Monthly plan, no commitment. Cancel anytime from your settings and your plan continues through the end of your current billing period. No retention emails, no "are you sure" loops.'}
             />
           </div>
         </div>
