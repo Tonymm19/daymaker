@@ -5,8 +5,8 @@ import { useAuth } from '@/lib/firebase/AuthContext';
 import { useUser } from '@/lib/hooks/useUser';
 import { getDb } from '@/lib/firebase/config';
 import { getAuth } from 'firebase/auth';
-import { doc, getDoc, collection, getDocs, orderBy, query } from 'firebase/firestore';
-import type { MonthlyBriefing, Contact } from '@/lib/types';
+import { doc, getDoc } from 'firebase/firestore';
+import type { MonthlyBriefing } from '@/lib/types';
 import Link from 'next/link';
 
 export default function BriefingPage() {
@@ -40,34 +40,24 @@ export default function BriefingPage() {
           setBriefing(null);
         }
 
-        // Load sparkline data (15 months back)
-        const cRef = collection(db, 'users', user.uid, 'contacts');
-        const cSnap = await getDocs(cRef);
-        
-        const buckets: Record<string, number> = {};
-        for(let i = 0; i < 15; i++) {
-          const d = new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth() - i, 1);
-          const key = `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')}`;
-          buckets[key] = 0;
-        }
-
-        cSnap.forEach(cd => {
-          const c = cd.data() as Contact;
-          if (c.connectedOn) {
-            const co = c.connectedOn.toDate ? c.connectedOn.toDate() : new Date((c.connectedOn as any).seconds * 1000);
-            if (!isNaN(co.getTime())) {
-              const mk = `${co.getFullYear()}-${(co.getMonth() + 1).toString().padStart(2, '0')}`;
-              if (buckets[mk] !== undefined) {
-                buckets[mk]++;
-              }
-            }
+        // Load sparkline histogram from the server endpoint. The page used to
+        // enumerate every contact doc via the Web SDK (which has no field
+        // projection) just to count connections per month, which shipped the
+        // full 1,536-dim embedding array per contact to the browser. The
+        // server endpoint uses the admin SDK's .select('connectedOn') so the
+        // payload is ~15 integers.
+        try {
+          const token = await getAuth().currentUser?.getIdToken();
+          const res = await fetch('/api/briefing/sparkline', {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.sparkline)) setSparklineData(data.sparkline);
           }
-        });
-
-        // Convert Map to Array sorted accurately (oldest to newest)
-        const sortedKeys = Object.keys(buckets).sort((a,b) => a.localeCompare(b));
-        const arr = sortedKeys.map(k => buckets[k]);
-        setSparklineData(arr);
+        } catch (sparkErr) {
+          console.warn('Sparkline fetch failed', sparkErr);
+        }
 
       } catch (err) {
         console.error("Failed to load briefing", err);
@@ -76,7 +66,7 @@ export default function BriefingPage() {
       }
     }
     loadData();
-  }, [user, monthString, currentMonthDate]);
+  }, [user, monthString]);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
