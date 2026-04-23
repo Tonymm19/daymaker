@@ -436,7 +436,7 @@ export default function SettingsPage() {
           </div>
 
           {/* North Star Section */}
-          <div className="card" style={{ padding: '24px' }}>
+          <div id="north-star" className="card" style={{ padding: '24px', scrollMarginTop: '80px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
               <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--text)' }}>North Star Goal</h3>
               <button 

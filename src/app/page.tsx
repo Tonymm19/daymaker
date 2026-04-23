@@ -5,7 +5,7 @@ import { BRAND } from '@/lib/brand.config';
 // the logged-in product's navy theme is unaffected.
 const C = {
   bg: '#1a1310',
-  surface: '#24191A',
+  surface: '#2d1f1b',
   surfaceAlt: '#15100D',
   text: '#F5EDE0',
   text2: '#B5A894',
@@ -49,9 +49,12 @@ export default function LandingPage() {
       {/* Scoped responsive rules, kept minimal; targets only descendants of .landing-v2 */}
       <style>{`
         .landing-v2 a { color: inherit; text-decoration: none; }
+        .landing-v2 .lv2-inline-link { color: #E88A3C; text-decoration: none; }
+        .landing-v2 .lv2-inline-link:hover { text-decoration: underline; }
         .landing-v2 .lv2-hero-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 64px; align-items: center; }
         .landing-v2 .lv2-hero-h1 { font-size: 52px; line-height: 1.08; letter-spacing: -1.2px; }
         .landing-v2 .lv2-nav-links { display: flex; align-items: center; gap: 28px; }
+        .landing-v2 .lv2-nav-textlinks { display: flex; align-items: center; gap: 24px; }
         .landing-v2 .lv2-shell { padding-left: 48px; padding-right: 48px; }
         .landing-v2 .lv2-sec-pad { padding-top: 80px; padding-bottom: 80px; }
         .landing-v2 .lv2-cta-pad { padding-top: 96px; padding-bottom: 96px; }
@@ -112,10 +115,7 @@ export default function LandingPage() {
           </Link>
 
           <div className="lv2-nav-links">
-            <div
-              className="lv2-nav-textlinks"
-              style={{ display: 'flex', alignItems: 'center', gap: '24px' }}
-            >
+            <div className="lv2-nav-textlinks">
               <a href="#how-it-works" style={{ fontSize: '13px', color: C.text2 }}>
                 How it works
               </a>
@@ -324,7 +324,7 @@ export default function LandingPage() {
                   initials="PS"
                   name="Priya Shah"
                   meta="Director of BD · Fieldnote Labs"
-                  pill="8 months"
+                  pill="Last: 8 mo"
                 />
               </div>
             </div>
@@ -621,27 +621,27 @@ export default function LandingPage() {
 
           <div className="lv2-sec3-grid">
             <UseCaseCard
-              question={'"Who in my network works at Northwind Pay?"'}
+              question="Who in my network works at Northwind Pay?"
               explanation="For targeted outreach, warm intros, or figuring out who could refer you in."
             />
             <UseCaseCard
-              question={'"Who should I invite to Thursday\'s dinner?"'}
+              question="Who should I invite to Thursday's dinner?"
               explanation="Curate guest lists from the people in your network who actually fit the room."
             />
             <UseCaseCard
-              question={'"Who has experience launching a healthtech SaaS?"'}
+              question="Who has experience launching a healthtech SaaS?"
               explanation="Find expertise for specific problems, without posting on LinkedIn and waiting."
             />
             <UseCaseCard
-              question={'"Who could introduce me to Sarah Lin at Helix?"'}
+              question="Who could introduce me to Sarah Lin at Helix?"
               explanation="Trace the shortest warm path from your network to any target."
             />
             <UseCaseCard
-              question={'"Who should I target for my new consulting service?"'}
+              question="Who should I target for my new consulting service?"
               explanation="Marketing outreach that starts with people who already trust you."
             />
             <UseCaseCard
-              question={'"Which VCs in my network fund companies at my stage?"'}
+              question="Which VCs in my network fund companies at my stage?"
               explanation="Narrow a fundraising list to the contacts with real relevance and familiarity."
             />
           </div>
@@ -754,9 +754,13 @@ export default function LandingPage() {
                   margin: '0 0 24px 0',
                 }}
               >
-                Pick any contact. Get a synergy analysis: where your work overlaps, where
-                your networks connect, and three concrete opportunities to collaborate.
-                Drafted in the voice of someone who knows you both.
+                Pick any contact. Get a synergy analysis tied to your{' '}
+                <Link href="/settings#north-star" className="lv2-inline-link">
+                  North Star
+                </Link>{' '}
+                goals: where your work overlaps, where your networks connect, and three
+                concrete opportunities to collaborate. Drafted in the voice of someone who
+                knows you both.
               </p>
               <ul
                 style={{
@@ -1048,7 +1052,7 @@ export default function LandingPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: C.text3, fontSize: '12px' }}>
             <SunMark size={16} />
             <span>
-              Daymaker Connect · Built by {BRAND.company}
+              Daymaker Connect · © 2026 {BRAND.company}
             </span>
           </div>
           <div
@@ -1057,7 +1061,7 @@ export default function LandingPage() {
           >
             <Link href="/privacy">Privacy</Link>
             <Link href="/terms">Terms</Link>
-            <a href={`mailto:support@${BRAND.domain}`}>Contact</a>
+            <a href="mailto:hello@daymakerconnect.com">Contact</a>
           </div>
         </div>
       </footer>
@@ -1425,7 +1429,7 @@ function FaqItem({
       style={{
         paddingTop: first ? 0 : '20px',
         paddingBottom: '20px',
-        borderBottom: last ? 'none' : `1px solid ${C.border}`,
+        borderBottom: last ? 'none' : '1px solid #4a362f',
       }}
     >
       <div
