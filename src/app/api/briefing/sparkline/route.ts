@@ -3,11 +3,16 @@ import { getAuth } from 'firebase-admin/auth';
 
 export const dynamic = 'force-dynamic';
 
-// Returns the 15-month connection-count histogram that drives the sparkline on
-// /briefing. Exists because the Web SDK doesn't support field projection and
-// the page was downloading full contact docs (embeddings and all) just to
-// compute this — ~110 MB per page load on Tonya's 8,951-contact account.
-// Projects to `connectedOn` only via the admin SDK so the scan is cheap.
+// Returns 15 rolling 30-day window counts that drive the sparkline on
+// /briefing. Each bucket is a 30-day window so every bar is the same length
+// and the last bar doesn't shrink as the month progresses. Matches the
+// headline delta's trailing-30 framing. Index 0 is oldest (420-450 days ago),
+// index 14 is newest (last 30 days).
+//
+// Exists because the Firestore Web SDK doesn't support field projection and
+// the page was downloading full contact docs (embeddings and all) to compute
+// this — ~110 MB per page load on Tonya's 8,951-contact account. This route
+// uses the admin SDK's .select('connectedOn') so the scan is cheap.
 export async function GET(request: Request) {
   try {
     const { adminDb } = await import('@/lib/firebase/admin');
@@ -29,15 +34,12 @@ export async function GET(request: Request) {
       .select('connectedOn')
       .get();
 
-    const now = new Date();
-    const buckets: Record<string, number> = {};
-    const orderedKeys: string[] = [];
-    for (let i = 14; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`;
-      buckets[key] = 0;
-      orderedKeys.push(key);
-    }
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const WINDOW_MS = 30 * DAY_MS;
+    const BUCKETS = 15;
+    const now = Date.now();
+    const oldestStart = now - BUCKETS * WINDOW_MS;
+    const buckets = new Array<number>(BUCKETS).fill(0);
 
     snap.forEach((doc) => {
       const connectedOn = doc.get('connectedOn');
@@ -45,14 +47,16 @@ export async function GET(request: Request) {
       const date = typeof connectedOn.toDate === 'function'
         ? connectedOn.toDate()
         : new Date(connectedOn.seconds * 1000);
-      if (isNaN(date.getTime())) return;
-      const key = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-      if (buckets[key] !== undefined) buckets[key]++;
+      const ms = date.getTime();
+      if (isNaN(ms)) return;
+      if (ms <= oldestStart || ms > now) return;
+      // Bucket 14 is most recent (now - 30d, now]; bucket 0 is oldest.
+      const offsetFromNow = now - ms;
+      const idx = BUCKETS - 1 - Math.floor(offsetFromNow / WINDOW_MS);
+      if (idx >= 0 && idx < BUCKETS) buckets[idx]++;
     });
 
-    return NextResponse.json({
-      sparkline: orderedKeys.map((k) => buckets[k]),
-    });
+    return NextResponse.json({ sparkline: buckets });
   } catch (err: any) {
     console.error('[Sparkline] Error:', err);
     return NextResponse.json({ error: err.message || 'Sparkline fetch failed' }, { status: 500 });

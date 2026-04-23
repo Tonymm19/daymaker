@@ -33,8 +33,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid month format, expected YYYY-MM' }, { status: 400 });
     }
 
-    const targetYear = parseInt(month.split('-')[0], 10);
-    const targetMonth = parseInt(month.split('-')[1], 10) - 1; // 0-indexed
+    // Trailing-30 / prior-30 windows. The briefing is "monthly" in cadence
+    // but its data windows are rolling — this keeps the delta apples-to-apples
+    // regardless of which day in the month the briefing is generated. Previous
+    // implementation compared April MTD (partial) against March full month,
+    // which mechanically inflated negative deltas early in a month.
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const windowCurrentStart = now - 30 * DAY_MS;
+    const windowPriorStart = now - 60 * DAY_MS;
+    const windowPriorEnd = windowCurrentStart;
 
     // 2. Fetch User Data
     const userRef = adminDb.collection('users').doc(uid);
@@ -68,14 +76,16 @@ export async function POST(req: Request) {
     contactsSnap.forEach(doc => allContacts.push(doc.data() as Contact));
 
     // 4. Compute Metrics Locally
-    let newConnectionsThisMonth = 0;
+    let newConnectionsLast30 = 0;
     let totalNetwork = allContacts.length;
-    let prevMonthConnections = 0;
-    
+    let newConnectionsPrior30 = 0;
+
     const newConnectionsList: Contact[] = [];
     const movements: any[] = [];
-    
-    // Array to detect daily clusters mapping: YYYY-MM-DD -> count
+
+    // Daily cluster detection runs across the same trailing 30 day window as
+    // the headline metric so "cluster detected" and "new connections" agree
+    // on what "recent" means.
     const dailyConnectionCounts: Record<string, { count: number; contacts: Contact[] }> = {};
 
     allContacts.forEach((contact) => {
@@ -98,16 +108,14 @@ export async function POST(req: Request) {
 
       if (contact.connectedOn) {
         const dateObj = contact.connectedOn.toDate ? contact.connectedOn.toDate() : new Date((contact.connectedOn as any).seconds * 1000);
-        const cYear = dateObj.getFullYear();
-        const cMonth = dateObj.getMonth();
+        const ms = dateObj.getTime();
 
-        // New connections this target month
-        if (cYear === targetYear && cMonth === targetMonth) {
-          newConnectionsThisMonth++;
+        // Current window: last 30 days (now - 30d, now].
+        if (ms > windowCurrentStart && ms <= now) {
+          newConnectionsLast30++;
           newConnectionsList.push(contact);
 
-          // For daily clusters
-          const dayKey = `${cYear}-${(cMonth + 1).toString().padStart(2, '0')}-${dateObj.getDate().toString().padStart(2, '0')}`;
+          const dayKey = `${dateObj.getFullYear()}-${(dateObj.getMonth() + 1).toString().padStart(2, '0')}-${dateObj.getDate().toString().padStart(2, '0')}`;
           if (!dailyConnectionCounts[dayKey]) {
             dailyConnectionCounts[dayKey] = { count: 0, contacts: [] };
           }
@@ -115,20 +123,16 @@ export async function POST(req: Request) {
           dailyConnectionCounts[dayKey].contacts.push(contact);
         }
 
-        // Previous month logic for Growth%
-        let prevM = targetMonth - 1;
-        let prevY = targetYear;
-        if (prevM < 0) {
-          prevM = 11;
-          prevY--;
-        }
-        if (cYear === prevY && cMonth === prevM) {
-          prevMonthConnections++;
+        // Prior window: (now - 60d, now - 30d].
+        if (ms > windowPriorStart && ms <= windowPriorEnd) {
+          newConnectionsPrior30++;
         }
       }
     });
 
-    const networkGrowthPercent = prevMonthConnections === 0 ? 100 : Math.round(((newConnectionsThisMonth - prevMonthConnections) / prevMonthConnections) * 100);
+    const networkGrowthPercent = newConnectionsPrior30 === 0
+      ? 100
+      : Math.round(((newConnectionsLast30 - newConnectionsPrior30) / newConnectionsPrior30) * 100);
 
     // 5. Cluster Detection
     const detectedClusters = Object.entries(dailyConnectionCounts)
@@ -149,12 +153,13 @@ export async function POST(req: Request) {
 You MUST reply strictly with pure JSON. Do not use markdown backticks, do not include conversation filler.`;
 
     const userPrompt = `
-Analyze the user's networking data for month ${month}.
+Analyze the user's networking data for the ${month} briefing window (last 30 days).
 User's Goal (North Star): "${targetNorthStar}"
 
 Metrics provided:
 - Total Network: ${totalNetwork}
-- New Connections this month: ${newConnectionsThisMonth}
+- New Connections (last 30 days): ${newConnectionsLast30}
+- New Connections (prior 30 days): ${newConnectionsPrior30}
 - Movement Changes size: ${movements.length}
 - Detected Clusters: ${JSON.stringify(detectedClusters)}
 
@@ -250,8 +255,8 @@ Based on the subsets provided above, generate the following JSON exactly parsing
       briefingId,
       userId: uid,
       month,
-      generatedAt: new Date() as any, // mapping Admin timestamp back to type 
-      newConnections: newConnectionsThisMonth,
+      generatedAt: new Date() as any, // mapping Admin timestamp back to type
+      newConnections: newConnectionsLast30,
       totalNetwork: totalNetwork,
       networkGrowthPercent,
       movements: parsedBriefing.movements || [],
@@ -259,7 +264,9 @@ Based on the subsets provided above, generate the following JSON exactly parsing
       clusters: parsedBriefing.clusters || [],
       goals: parsedBriefing.goals || [],
       introNarrative: parsedBriefing.introNarrative || '',
-      summaryNarrative: parsedBriefing.summaryNarrative || ''
+      summaryNarrative: parsedBriefing.summaryNarrative || '',
+      currentWindowLabel: 'last 30 days',
+      previousWindowLabel: 'prior 30 days',
     };
 
     const docRef = adminDb.collection('users').doc(uid).collection('briefings').doc(briefingId);

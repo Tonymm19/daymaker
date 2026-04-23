@@ -173,10 +173,13 @@ export default function BriefingPage() {
         <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
           <div className="stat-card" style={{ background: 'var(--surface-color)', padding: '20px', borderRadius: '8px', border: '1px solid var(--orange)' }}>
             <div style={{ fontSize: '32px', fontFamily: "'JetBrains Mono', monospace", color: 'var(--orange)', marginBottom: '4px' }}>{briefing.newConnections}</div>
-            <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '8px' }}>New connections</div>
+            <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '2px' }}>New connections</div>
+            <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
+              {briefing.currentWindowLabel || 'current period'}
+            </div>
             <div>
               <span style={{ fontSize: '11px', fontWeight: 600, padding: '4px 8px', borderRadius: '4px', background: briefing.networkGrowthPercent >= 0 ? 'rgba(39, 174, 96, 0.15)' : 'rgba(235, 87, 87, 0.15)', color: briefing.networkGrowthPercent >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                {briefing.networkGrowthPercent >= 0 ? '↑' : '↓'} {Math.abs(briefing.networkGrowthPercent)}% vs Prev
+                {briefing.networkGrowthPercent >= 0 ? '↑' : '↓'} {Math.abs(briefing.networkGrowthPercent)}% vs {briefing.previousWindowLabel || 'prev'}
               </span>
             </div>
           </div>
@@ -196,7 +199,7 @@ export default function BriefingPage() {
 
         {/* SPARKLINE */}
         <div style={{ background: 'var(--surface-color)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)' }}>
-          <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '16px' }}>Connection growth &mdash; last 15 months</div>
+          <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '16px' }}>Connection growth, rolling 30-day windows, last 15 months</div>
           <div style={{ display: 'flex', alignItems: 'flex-end', height: '60px', gap: '8px' }}>
             {sparklineData.map((val, idx) => {
               const isLast = idx === sparklineData.length - 1;

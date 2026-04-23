@@ -290,6 +290,12 @@ export interface MonthlyBriefing {
   // Narrative sections (AI-generated markdown)
   introNarrative: string;
   summaryNarrative: string;
+
+  // Explicit window labels for the "new connections" / "vs prev" framing.
+  // Optional so pre-existing briefings (calendar-month math) still render
+  // without a type error; the page falls back to generic copy when absent.
+  currentWindowLabel?: string;
+  previousWindowLabel?: string;
 }
 
 export interface NetworkMovement {
