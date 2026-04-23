@@ -315,14 +315,37 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="hdr-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <a href="https://www.linkedin.com/mypreferences/d/download-my-data" target="_blank" rel="noreferrer" className="text-btn" style={{ 
-              color: 'var(--orange)', 
-              fontSize: '14px', 
-              textDecoration: 'none',
-              fontWeight: 500 
-            }}>
-              Refresh LinkedIn Data ↗
-            </a>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+              <a href="https://www.linkedin.com/mypreferences/d/download-my-data" target="_blank" rel="noreferrer" className="text-btn" style={{
+                color: 'var(--orange)',
+                fontSize: '14px',
+                textDecoration: 'none',
+                fontWeight: 500
+              }}>
+                Refresh LinkedIn Data ↗
+              </a>
+              {(() => {
+                const ts = userDoc?.linkedInImportedAt;
+                if (!ts) {
+                  return <span style={{ fontSize: '12px', color: 'var(--muted)' }}>No refresh history</span>;
+                }
+                const importedMs = ts.seconds * 1000;
+                const days = Math.floor((Date.now() - importedMs) / 86_400_000);
+                let label: string;
+                let color: string;
+                if (days <= 0) {
+                  label = 'Refreshed today';
+                  color = 'var(--green)';
+                } else if (days === 1) {
+                  label = '1 day since last refresh';
+                  color = 'var(--green)';
+                } else {
+                  label = `${days} days since last refresh`;
+                  color = days < 15 ? 'var(--green)' : days < 30 ? 'var(--blue)' : 'var(--red)';
+                }
+                return <span style={{ fontSize: '12px', color }}>{label}</span>;
+              })()}
+            </div>
             <button className="btn" onClick={() => setShowUpload(true)}>Upload CSV</button>
           </div>
         </div>
