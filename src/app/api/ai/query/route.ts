@@ -24,7 +24,11 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const query = body.query as string;
-    
+    const excludeContactIds: string[] = Array.isArray(body.excludeContactIds)
+      ? body.excludeContactIds.filter((id: unknown): id is string => typeof id === 'string')
+      : [];
+    const isFollowUp = excludeContactIds.length > 0;
+
     if (!query || typeof query !== 'string') {
       return NextResponse.json({ error: 'Missing or invalid query parameters' }, { status: 400 });
     }
@@ -129,6 +133,26 @@ export async function POST(request: Request) {
       contextData = contextData.filter((c: any) => !hiddenSet.has(c?.contactId));
     }
 
+    // Drop contacts already surfaced in previous rounds of this "Give me more
+    // results" session. When the exclude list wipes the pool entirely, short
+    // circuit instead of spending a Claude call on an empty context.
+    if (excludeContactIds.length > 0) {
+      const excludeSet = new Set(excludeContactIds);
+      contextData = contextData.filter((c: any) => !excludeSet.has(c?.contactId));
+    }
+
+    if (isFollowUp && contextData.length === 0) {
+      return NextResponse.json({
+        content: 'No more matches found for this query.',
+        contactsReferenced: 0,
+        matchedContacts: [],
+        tokensUsed: 0,
+        ragUsed,
+        durationMs: Date.now() - startTime,
+        noMoreMatches: true,
+      });
+    }
+
     // 3. Prompt Construction
     const systemPrompt = buildQuerySystemPrompt(
       displayName,
@@ -139,6 +163,7 @@ export async function POST(request: Request) {
       currentGoal,
       connectionType,
       onboardingAnswers,
+      isFollowUp,
     );
 
     // 4. Call Claude
@@ -163,13 +188,22 @@ export async function POST(request: Request) {
         linkedInUrl: (c.linkedInUrl as string) || '',
       }));
 
+    // On follow-up rounds, either Claude's "No more matches" response OR a
+    // response that surfaced no new person blocks means we've exhausted the
+    // pool. Client uses this flag to flip the button into the disabled state.
+    const noMoreMatches =
+      isFollowUp &&
+      (/\bno more matches found for this query\b/i.test(claudeResult.content) ||
+        !/^###\s/m.test(claudeResult.content));
+
     return NextResponse.json({
       content: claudeResult.content,
       contactsReferenced: contextData.length,
       matchedContacts,
       tokensUsed: claudeResult.inputTokens + claudeResult.outputTokens,
       ragUsed,
-      durationMs
+      durationMs,
+      noMoreMatches,
     });
 
   } catch (error: unknown) {

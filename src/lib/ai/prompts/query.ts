@@ -43,6 +43,7 @@ export function buildQuerySystemPrompt(
   currentGoal?: string,
   connectionType?: string,
   onboardingAnswers?: OnboardingAnswers | null,
+  isFollowUp: boolean = false,
 ): string {
   const contextString = contextData
     .map(c => {
@@ -54,6 +55,13 @@ export function buildQuerySystemPrompt(
 
   const rmBlock = buildRmContextBlock(rm);
 
+  const followUpBlock = isFollowUp
+    ? `
+### Follow-up Query
+This is a follow-up to an earlier query on the same topic. Contacts you previously surfaced have been removed from the Contact Context Data below. Find any additional relevant people from the remaining candidates and list them using the same format. Skip the \`## Next Actions\` section on this follow-up. If no remaining candidates clearly match the original query, respond with exactly this single line and nothing else: **No more matches found for this query.**
+`
+    : '';
+
   return `You are an elite, highly strategic Relationship Manager (RM) operating the "Daymaker Connect" platform for your client, ${displayName}.
 Your goal is to parse their network and proactively suggest high-value interactions based strictly on the provided contact data.
 
@@ -64,6 +72,7 @@ ${formatGoalsBlock(northStar, currentGoal, connectionType, onboardingAnswers)}
 ${rmBlock}
 
 When the client has an active **Current Goal** or **Seeking** preference, weight the short-horizon need heavily in your ranking. The North Star sets long-term direction; the Current Goal tells you what matters this quarter.
+${followUpBlock}
 
 ### Matching Rules
 

@@ -340,6 +340,16 @@ export default function AiAgentTab({ onSelectContact }: AiAgentTabProps = {}) {
   const [metrics, setMetrics] = useState<{ tokensUsed: number; durationMs: number; ragUsed: boolean; contactsReferenced: number } | null>(null);
   const [matchedContacts, setMatchedContacts] = useState<MatchedContact[]>([]);
   const [phaseIndex, setPhaseIndex] = useState(0);
+  // Follow-up round state. `lastAskedQuery` is the original query string so the
+  // "Give me more results" click re-runs the same prompt. `followUpResponses`
+  // holds subsequent rounds' markdown, rendered as stacked cards under the
+  // primary response. `shownContactIds` accumulates across rounds and is sent
+  // as the exclusion list on the next click.
+  const [lastAskedQuery, setLastAskedQuery] = useState('');
+  const [followUpResponses, setFollowUpResponses] = useState<string[]>([]);
+  const [shownContactIds, setShownContactIds] = useState<string[]>([]);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const [moreExhausted, setMoreExhausted] = useState(false);
 
   // Walk phase labels on a simple schedule: 0 → 1 at 5s, 1 → 2 at 15s.
   useEffect(() => {
@@ -393,7 +403,7 @@ export default function AiAgentTab({ onSelectContact }: AiAgentTabProps = {}) {
 
   const handleAsk = async (text: string) => {
     if (!text.trim()) return;
-    
+
     setQuery(text);
     setIsLoading(true);
     setError('');
@@ -401,6 +411,10 @@ export default function AiAgentTab({ onSelectContact }: AiAgentTabProps = {}) {
     setResponse('');
     setMetrics(null);
     setMatchedContacts([]);
+    setFollowUpResponses([]);
+    setShownContactIds([]);
+    setMoreExhausted(false);
+    setLastAskedQuery(text);
 
     try {
       const auth = getAuth();
@@ -449,11 +463,80 @@ export default function AiAgentTab({ onSelectContact }: AiAgentTabProps = {}) {
         ragUsed: !!data.ragUsed,
         contactsReferenced: data.contactsReferenced || 0
       });
-      setMatchedContacts(Array.isArray(data.matchedContacts) ? data.matchedContacts : []);
+      const initialMatched = Array.isArray(data.matchedContacts) ? data.matchedContacts : [];
+      setMatchedContacts(initialMatched);
+      setShownContactIds(initialMatched.map((c: MatchedContact) => c.contactId));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleGetMore = async () => {
+    if (!lastAskedQuery || isFetchingMore || moreExhausted) return;
+
+    setIsFetchingMore(true);
+    setError('');
+
+    try {
+      const auth = getAuth();
+      const token = await auth?.currentUser?.getIdToken();
+
+      const res = await fetch('/api/ai/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          query: lastAskedQuery,
+          excludeContactIds: shownContactIds,
+        }),
+      });
+
+      let data: { content?: string; matchedContacts?: MatchedContact[]; noMoreMatches?: boolean; error?: string; message?: string; upgradeUrl?: string } = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
+
+      if (!res.ok) {
+        if (data.error === 'limit_reached') {
+          setLimitReached({
+            message: data.message || "You've used your free AI queries this month. Upgrade to Pro for unlimited queries.",
+            upgradeUrl: data.upgradeUrl || '/settings',
+          });
+          return;
+        }
+        throw new Error(data.error || `Failed to fetch more results (HTTP ${res.status})`);
+      }
+
+      const newMatched = Array.isArray(data.matchedContacts) ? data.matchedContacts : [];
+      const newIds = newMatched.map((c) => c.contactId);
+      const content = data.content || '';
+      const hasPersonBlocks = /^###\s/m.test(content);
+
+      if (data.noMoreMatches || !hasPersonBlocks || newMatched.length === 0) {
+        setMoreExhausted(true);
+        // Still append a short note so the user sees Claude's "no more" reply
+        // in context rather than just a button state change.
+        if (content && hasPersonBlocks) {
+          setFollowUpResponses((prev) => [...prev, content]);
+          setMatchedContacts((prev) => [...prev, ...newMatched]);
+          setShownContactIds((prev) => [...prev, ...newIds]);
+        }
+        return;
+      }
+
+      setFollowUpResponses((prev) => [...prev, content]);
+      setMatchedContacts((prev) => [...prev, ...newMatched]);
+      setShownContactIds((prev) => [...prev, ...newIds]);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch more results');
+    } finally {
+      setIsFetchingMore(false);
     }
   };
 
@@ -602,6 +685,91 @@ export default function AiAgentTab({ onSelectContact }: AiAgentTabProps = {}) {
                     </div>
                   );
                 })}
+                {followUpResponses.map((extra, idx) => (
+                  <div key={`extra-${idx}`} style={{ marginTop: '28px' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        margin: '0 0 14px 0',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: 'var(--orange)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '1.5px',
+                      }}
+                    >
+                      Additional Results
+                      <span style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+                    </div>
+                    {splitAgentResponse(extra).map((seg, i) => {
+                      if (seg.type !== 'person') {
+                        return (
+                          <ReactMarkdown key={i} components={resolvedComponents}>
+                            {seg.content}
+                          </ReactMarkdown>
+                        );
+                      }
+                      const firstLine = seg.content.split('\n', 1)[0] ?? '';
+                      const nameHeading = firstLine.replace(/^### /, '').toLowerCase();
+                      const match =
+                        sortedMatched.find(
+                          (c) => c.fullName && nameHeading.includes(c.fullName.toLowerCase()),
+                        ) ?? null;
+                      const inlineLinkedIn = seg.content.match(LINKEDIN_LINK_RE)?.[1] ?? null;
+                      const linkedInUrl =
+                        (match?.linkedInUrl && match.linkedInUrl.trim()) ||
+                        inlineLinkedIn ||
+                        null;
+                      const stripped = seg.content
+                        .replace(LINKEDIN_LINK_LINE_RE, '')
+                        .replace(/\n{3,}/g, '\n\n')
+                        .trim();
+                      return (
+                        <div key={i} style={personCardStyle}>
+                          <ReactMarkdown components={resolvedComponents}>{stripped}</ReactMarkdown>
+                          <PersonActionBar
+                            linkedInUrl={linkedInUrl}
+                            contactId={match?.contactId ?? null}
+                            onSelectContact={onSelectContact}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+
+                {!error && !limitReached && (
+                  <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={handleGetMore}
+                      disabled={isFetchingMore || moreExhausted}
+                      style={{
+                        padding: '10px 20px',
+                        fontSize: '13px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                      }}
+                    >
+                      {isFetchingMore && (
+                        <span
+                          className="loading-spinner"
+                          style={{ width: '14px', height: '14px', borderWidth: '2px' }}
+                        />
+                      )}
+                      {moreExhausted
+                        ? 'No more matches for this query'
+                        : isFetchingMore
+                          ? 'Finding more...'
+                          : 'Give me more results'}
+                    </button>
+                  </div>
+                )}
+
                 {(() => {
                   const trailing = extractTrailingQuestion(response);
                   if (!trailing) return null;
