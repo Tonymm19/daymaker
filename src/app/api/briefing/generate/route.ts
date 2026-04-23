@@ -45,8 +45,25 @@ export async function POST(req: Request) {
     const userDoc = userDocRef.data();
     const targetNorthStar = userDoc?.northStar?.trim() || "";
 
-    // 3. Fetch ALL Contacts
-    const contactsSnap = await userRef.collection('contacts').get();
+    // 3. Fetch ALL Contacts.
+    // Project only the fields the briefing logic below actually reads. Pulling
+    // the full doc loads the 1,536-dim `embedding` array per contact, which
+    // SIGABRTed the container at ~1 GB heap on 9K-contact networks. Same fix
+    // pattern as the prebrief projection in a9c215c.
+    const contactsSnap = await userRef
+      .collection('contacts')
+      .select(
+        'contactId',
+        'fullName',
+        'firstName',
+        'lastName',
+        'company',
+        'position',
+        'previousCompany',
+        'previousPosition',
+        'connectedOn',
+      )
+      .get();
     const allContacts: Contact[] = [];
     contactsSnap.forEach(doc => allContacts.push(doc.data() as Contact));
 
@@ -203,7 +220,7 @@ Based on the subsets provided above, generate the following JSON exactly parsing
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
+      max_tokens: 8192,
       temperature: 0.2,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }]
@@ -211,7 +228,21 @@ Based on the subsets provided above, generate the following JSON exactly parsing
 
     const outputText = ('text' in message.content[0]) ? message.content[0].text : '';
     const cleanedJson = outputText.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
-    const parsedBriefing = JSON.parse(cleanedJson);
+
+    // Wrap the parse: Claude occasionally returns truncated or markdown-wrapped
+    // JSON. Log the raw response so failures are diagnosable, then 502 so the
+    // client knows to retry. No quota refund needed — this endpoint doesn't
+    // currently track briefing quota.
+    let parsedBriefing: any;
+    try {
+      parsedBriefing = JSON.parse(cleanedJson);
+    } catch (parseErr) {
+      console.error('[Monthly Briefing] JSON parse failed. Raw response:', outputText);
+      return NextResponse.json(
+        { error: 'parse_failed', message: 'Claude response could not be parsed. Please try again.' },
+        { status: 502 },
+      );
+    }
 
     // 7. Store Result
     const briefingId = month; // e.g. '2026-04'
