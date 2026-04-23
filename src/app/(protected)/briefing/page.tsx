@@ -16,6 +16,11 @@ export default function BriefingPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [sparklineData, setSparklineData] = useState<number[]>([]);
+  // Stepped status text during generation. There's no real backend progress
+  // signal (/api/briefing/generate is a single request/response), but the
+  // text updates make the ~30s wait feel less like a frozen skeleton. Matches
+  // the PHASE_LABELS pattern in AiAgentTab.
+  const [generationPhase, setGenerationPhase] = useState(0);
   
   const currentMonthDate = new Date();
   const monthString = `${currentMonthDate.getFullYear()}-${(currentMonthDate.getMonth() + 1).toString().padStart(2, '0')}`;
@@ -91,6 +96,28 @@ export default function BriefingPage() {
     }
   };
 
+  // Advance phase text while isGenerating. Timers cleared on unmount / when
+  // generation finishes so the text never flashes a later stage after early
+  // completion.
+  useEffect(() => {
+    if (!isGenerating) {
+      setGenerationPhase(0);
+      return;
+    }
+    const t1 = setTimeout(() => setGenerationPhase(1), 5000);
+    const t2 = setTimeout(() => setGenerationPhase(2), 15000);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [isGenerating]);
+
+  const GENERATION_PHASE_LABELS = [
+    'Loading your network...',
+    'Analyzing connections...',
+    'Generating insights...',
+  ];
+
   const maxSpark = Math.max(...sparklineData, 1);
 
   if (isLoading) {
@@ -101,6 +128,25 @@ export default function BriefingPage() {
   if (isGenerating) {
     return (
       <main style={{ padding: '32px', maxWidth: '1000px', margin: '0 auto' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            marginBottom: '24px',
+            color: 'var(--text)',
+            fontSize: '14px',
+            fontWeight: 500,
+          }}
+          aria-live="polite"
+        >
+          <div
+            className="loading-spinner"
+            style={{ width: '16px', height: '16px', borderWidth: '2px' }}
+          />
+          <span>{GENERATION_PHASE_LABELS[generationPhase]}</span>
+        </div>
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <div className="skeleton" style={{ width: '150px', height: '14px', margin: '0 auto 8px', borderRadius: '4px' }}></div>
           <div className="skeleton" style={{ width: '400px', height: '32px', margin: '0 auto 16px', borderRadius: '4px' }}></div>
