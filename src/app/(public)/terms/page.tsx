@@ -20,7 +20,7 @@ export default function TermsPage() {
       <h2>1. The service</h2>
       <p>
         {BRAND.name} turns your LinkedIn network data into AI-powered relationship intelligence,
-        including semantic search, contact categorization, event pre-briefings, and synergy
+        including semantic search, contact categorization, event pre-briefings, and alignment
         deep dives. Features may change as we improve the product.
       </p>
 

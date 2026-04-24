@@ -15,7 +15,7 @@ By creating an account or using Daymaker Connect ("the Service"), you agree to t
 
 ## 2. Description of Service
 
-Daymaker Connect is an AI-powered network intelligence platform that helps professionals analyze and leverage their LinkedIn connections. The Service provides contact categorization, natural language search, event briefings, synergy analysis, and AI-generated recommendations based on data you provide.
+Daymaker Connect is an AI-powered network intelligence platform that helps professionals analyze and leverage their LinkedIn connections. The Service provides contact categorization, natural language search, event briefings, alignment analysis, and AI-generated recommendations based on data you provide.
 
 ---
 
@@ -69,7 +69,7 @@ Daymaker Connect is an AI-powered network intelligence platform that helps profe
 - The Service uses artificial intelligence (Anthropic Claude and OpenAI) to generate categorizations, recommendations, conversation starters, event briefings, and other content.
 - AI-generated content is provided for informational purposes and should be treated as suggestions, not definitive assessments.
 - AI outputs may contain inaccuracies. You should verify important information independently before acting on AI recommendations.
-- Synergy scores, relevance scores, and other numerical assessments are AI-generated estimates, not precise measurements. They may vary between analyses.
+- Alignment scores, relevance scores, and other numerical assessments are AI-generated estimates, not precise measurements. They may vary between analyses.
 
 ---
 

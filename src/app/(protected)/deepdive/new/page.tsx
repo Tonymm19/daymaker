@@ -153,7 +153,7 @@ export default function DeepDiveNewPage() {
               animation: 'spin 1s linear infinite', margin: '0 auto 16px'
             }}></div>
             <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-            <div style={{ fontSize: '14px', color: 'var(--text)' }}>Generating synergy analysis...</div>
+            <div style={{ fontSize: '14px', color: 'var(--text)' }}>Generating alignment analysis...</div>
             <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '8px' }}>This may take 15-30 seconds. Do not close this page.</div>
           </div>
         ) : (
@@ -164,7 +164,7 @@ export default function DeepDiveNewPage() {
               </div>
             )}
             <button onClick={handleGenerate} className="btn primary" style={{ width: '100%', padding: '16px', fontSize: '15px' }}>
-              Begin Synergy Analysis
+              Begin Alignment Analysis
             </button>
           </>
         )}

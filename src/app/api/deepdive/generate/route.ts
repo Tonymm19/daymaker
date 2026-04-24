@@ -197,18 +197,18 @@ The dialogue MUST alternate naturally ensuring at least one message from EACH ag
 Execute the following 4-Round sequence:
 - Round 1: Profile Briefing (Introductions, focus areas)
 - Round 2: Network Overlap Scan (Identify overlapping industries/companies using provided overlap data; treat these as the user's contacts at similar companies, not verified mutuals)
-- Round 3: Synergy Identification (Identify 3-5 concrete synergy areas, valuing both sides)
+- Round 3: Alignment Identification (Identify 3-5 concrete alignment areas, valuing both sides)
 - Round 4: Action Recommendations (Specific steps for both parties)
 
 SCORING TRANSPARENCY:
-When assigning the synergyScore, explain the specific factors that drove the score. Weigh these dimensions explicitly:
+When assigning the alignment score (emitted as the synergyScore JSON field for backward compatibility), explain the specific factors that drove the score. Weigh these dimensions explicitly:
 1. Relevance to the user's North Star AND Current Goal — does the target advance either? The Current Goal / Seeking preference (if provided) should carry at least as much weight as the North Star.
 2. Seniority / influence level — how much decision-making power does the target appear to have?
 3. Industry overlap — do their domains intersect with the user's work or network?
 4. Recency of the connection — use the Connected On date provided. Recent (≤2 years) is stronger signal than old (>5 years).
 5. Current vs outdated position — does the position look up-to-date?
 
-The executiveSummary MUST briefly name the factors that pushed the score up or down (e.g. "Score reduced by stale 7-year-old connection and generic title; lifted by strong North Star alignment.").
+The executiveSummary MUST briefly name the factors that pushed the score up or down (e.g. "Score reduced by stale 7-year-old connection and generic title; lifted by strong North Star alignment."). When the user has multiple North Star goals, name which goal drove the match.
 
 DATA FRESHNESS:
 If the target's LinkedIn data appears outdated — no previousCompany change captured, connected many years ago (>5y) with a junior or generic title, or a position that reads as a past role — factor this into a LOWER score and call it out in the executiveSummary and Round 1 User Agent message. Include the Connected On date in your analysis context when discussing recency.
@@ -220,7 +220,7 @@ Return your output EXCLUSIVELY in the exact JSON format specified below. Do not 
   "synergyScore": <Integer 0-100 indicating alignment strength>,
   "topSynergies": [
     {
-      "area": "<Title of synergy>",
+      "area": "<Title of alignment area>",
       "strength": "<high | medium | low>",
       "valueForUser": "<What User gets from it>",
       "valueForTarget": "<What Target gets from it>"
@@ -248,7 +248,7 @@ Return your output EXCLUSIVELY in the exact JSON format specified below. Do not 
     },
     {
       "roundNumber": 3,
-      "title": "Synergy Identification",
+      "title": "Alignment Identification",
       "userAgentMessage": "<Agent 1 message>",
       "targetAgentMessage": "<Agent 2 message>"
     },

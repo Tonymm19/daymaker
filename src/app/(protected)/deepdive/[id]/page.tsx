@@ -104,7 +104,7 @@ export default function DeepDiveView() {
         {user?.displayName || 'User'} × {deepDive.targetName}
       </div>
       <div style={{ fontSize: '14px', color: 'var(--muted)', marginBottom: '32px' }}>
-        Network Synergy Analysis · {generatedDate}
+        Network Alignment Analysis · {generatedDate}
       </div>
 
       {/* Score Bar */}
@@ -113,7 +113,18 @@ export default function DeepDiveView() {
         padding: '24px 32px', background: 'var(--surface-color)', border: '1px solid var(--border)', marginBottom: '32px' 
       }}>
         <div>
-          <div style={{ fontSize: '12px', color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '8px' }}>Synergy Score</div>
+          <div
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--muted)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '8px' }}
+            title="Your Alignment Score shows how well this contact matches your stated North Star goals. Higher scores mean stronger alignment."
+          >
+            <span>Alignment Score</span>
+            <span
+              aria-hidden="true"
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '14px', height: '14px', borderRadius: '50%', border: '1px solid currentColor', fontSize: '9px', letterSpacing: 0, textTransform: 'none', cursor: 'help' }}
+            >
+              i
+            </span>
+          </div>
           <div style={{ fontSize: '48px', fontFamily: "'JetBrains Mono', monospace", color: 'var(--orange)', fontWeight: 300, lineHeight: 1 }}>
             {deepDive.synergyScore}<span style={{ fontSize: '24px', color: 'var(--muted)' }}>/100</span>
           </div>

@@ -71,7 +71,7 @@ export default function DeepDiveIndex() {
           Deep Dive Analysis
         </h1>
         <p style={{ color: 'var(--text2)' }}>
-          Strategic synergy analysis across your shared priorities and North Star.
+          Strategic alignment analysis across your shared priorities and North Star.
         </p>
       </div>
 
@@ -169,7 +169,7 @@ export default function DeepDiveIndex() {
               Run your first Deep Dive analysis
             </div>
             <p style={{ color: 'var(--text2)', fontSize: '13px', maxWidth: '380px', margin: '0 auto', lineHeight: 1.6 }}>
-              Pick any contact above to start a synergy analysis against your North Star.
+              Pick any contact above to start an alignment analysis against your North Star.
             </p>
           </div>
         ) : (

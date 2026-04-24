@@ -743,7 +743,7 @@ export default function LandingPage() {
                   margin: '0 0 24px 0',
                 }}
               >
-                Pick any contact. Get a synergy analysis tied to your{' '}
+                Pick any contact. Get an alignment analysis tied to your{' '}
                 <Link href="/settings#north-star" className="lv2-inline-link">
                   North Star
                 </Link>{' '}
@@ -813,7 +813,7 @@ export default function LandingPage() {
                       textTransform: 'uppercase',
                     }}
                   >
-                    Synergy
+                    Alignment
                   </div>
                 </div>
               </div>
