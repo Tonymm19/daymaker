@@ -322,6 +322,24 @@ export default function ContactDetailModal({ contact, isOpen, onClose, northStar
                       href={contact.linkedInUrl}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={async () => {
+                        // Fire-and-forget: tag the contact as followed-up so
+                        // it drops out of "Needs follow-up" on next load.
+                        // No await — let the browser open LinkedIn immediately.
+                        if (!contact?.contactId) return;
+                        try {
+                          const token = await getAuth()?.currentUser?.getIdToken();
+                          if (!token) return;
+                          fetch(`/api/contacts/${contact.contactId}/follow-up`, {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              Authorization: `Bearer ${token}`,
+                            },
+                            body: JSON.stringify({ via: 'linkedin' }),
+                          }).catch(() => {});
+                        } catch {}
+                      }}
                       className="btn"
                       style={{
                         display: 'inline-flex',

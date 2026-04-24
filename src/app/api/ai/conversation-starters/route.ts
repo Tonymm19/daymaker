@@ -149,6 +149,7 @@ Example: ["Hook 1", "Hook 2", "Hook 3"]`;
           .update({
             conversationStarters: starters,
             startersGeneratedAt: FieldValue.serverTimestamp(),
+            lastAnalyzedAt: FieldValue.serverTimestamp(),
           });
         persisted = true;
       } catch (writeErr) {

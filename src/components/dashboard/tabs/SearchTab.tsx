@@ -3,8 +3,116 @@ import type { Contact } from '@/lib/types';
 import Link from 'next/link';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import HideButton from '@/components/dashboard/HideButton';
+import { isOverdue, daysSinceAnalysis } from '@/lib/contacts/followUp';
+import { getAuth } from '@/lib/firebase/config';
 
 const PAGE_SIZE = 50;
+
+// Shared card renderer used by both the "Needs follow-up" section and the
+// main grid below it. Overdue cards get a subtle amber left-border and an
+// inline "Mark as followed up" button; non-overdue cards render exactly as
+// before so the list looks unchanged for contacts the user is staying on
+// top of.
+function renderContactCard(
+  contact: Contact,
+  opts: {
+    overdue: boolean;
+    onSelectContact?: (c: Contact) => void;
+    onHideContact?: (contactId: string) => void;
+    onMarkFollowedUp: (contactId: string) => void;
+  },
+) {
+  const { overdue, onSelectContact, onHideContact, onMarkFollowedUp } = opts;
+  const overdueDays = overdue ? daysSinceAnalysis(contact) : null;
+  return (
+    <div
+      key={contact.contactId}
+      className="c-card card"
+      onClick={() => onSelectContact && onSelectContact(contact)}
+      style={{
+        padding: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        cursor: 'pointer',
+        borderLeft: overdue ? '2px solid var(--orange)' : undefined,
+      }}
+    >
+      <div className="c-hdr" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div className="c-name" style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text)' }}>
+            {contact.fullName}
+          </div>
+          <div className="c-title" style={{ fontSize: '12px', color: 'var(--text2)' }}>
+            {contact.position || 'No Title'}
+          </div>
+        </div>
+        {onHideContact && (
+          <HideButton contactName={contact.fullName} onHide={() => onHideContact(contact.contactId)} />
+        )}
+      </div>
+
+      <div className="c-meta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="c-company" style={{ fontSize: '12px', color: 'var(--orange)', fontWeight: 500 }}>
+          {contact.company || 'Unknown Company'}
+        </div>
+        {contact.email && (
+          <div className="c-email" style={{ fontSize: '11px', color: 'var(--blue)' }}>
+            {contact.email}
+          </div>
+        )}
+      </div>
+
+      {overdue && overdueDays !== null && (
+        <div style={{ fontSize: '11px', color: 'var(--muted)', fontStyle: 'italic' }}>
+          Analyzed {overdueDays} days ago, no follow-up logged
+        </div>
+      )}
+
+      <div className="c-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: 'auto', paddingTop: '8px' }}>
+        {contact.categories?.map((tag, i) => (
+          <span key={`${tag}-${i}`} className="c-tag" style={{
+            fontSize: '10px',
+            padding: '4px 8px',
+            background: 'var(--orange-dim)',
+            color: 'var(--orange)',
+            borderRadius: '12px',
+            fontWeight: 500
+          }}>
+            {tag}
+          </span>
+        ))}
+      </div>
+
+      <div style={{ marginTop: '12px', borderTop: '1px solid var(--border)', paddingTop: '12px', display: 'flex', gap: '8px' }}>
+        <Link
+          href={`/deepdive/new?contactId=${contact.contactId}`}
+          onClick={(e) => e.stopPropagation()}
+          style={{ flex: 1, textAlign: 'center', fontSize: '12px', color: 'var(--orange)', fontWeight: 600, textDecoration: 'none', letterSpacing: '0.5px', textTransform: 'uppercase' }}
+        >
+          Deep Dive<span className="hide-mobile"> Analysis</span> ⚡
+        </Link>
+        {overdue && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMarkFollowedUp(contact.contactId);
+            }}
+            style={{
+              flex: 1, textAlign: 'center', fontSize: '11px', color: 'var(--text2)',
+              fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase',
+              background: 'transparent', border: '1px solid var(--border)',
+              borderRadius: '6px', padding: '4px 8px', cursor: 'pointer',
+            }}
+          >
+            Mark followed up
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 interface SearchTabProps {
   contacts: Contact[];
@@ -29,6 +137,32 @@ export default function SearchTab({
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query, 300);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  // Client-side optimistic "just marked followed up" set. Prevents the card
+  // from jumping back into the overdue section until the parent refreshes
+  // contacts from Firestore on its next poll. Keyed by contactId.
+  const [justFollowedUp, setJustFollowedUp] = useState<Set<string>>(() => new Set());
+
+  const handleMarkFollowedUp = async (contactId: string) => {
+    setJustFollowedUp((prev) => {
+      const next = new Set(prev);
+      next.add(contactId);
+      return next;
+    });
+    try {
+      const token = await getAuth()?.currentUser?.getIdToken();
+      if (!token) return;
+      await fetch(`/api/contacts/${contactId}/follow-up`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ via: 'manual' }),
+      });
+    } catch (err) {
+      console.warn('Follow-up mark failed', err);
+    }
+  };
 
   // Searching a 50-contact slice would silently miss matches in the other
   // 8,900+ records. Kick off the full load the moment the user starts typing.
@@ -70,6 +204,26 @@ export default function SearchTab({
     () => filteredContacts.slice(0, visibleCount),
     [filteredContacts, visibleCount]
   );
+
+  // Split visibleContacts into "needs follow-up" and everyone else. The
+  // optimistic justFollowedUp set bypasses the overdue check client-side so
+  // clicking "Mark as followed up" immediately moves the card down instead
+  // of waiting for the next parent re-fetch.
+  const { overdueContacts, regularContacts } = useMemo(() => {
+    const now = Date.now();
+    const overdue: Contact[] = [];
+    const regular: Contact[] = [];
+    for (const c of visibleContacts) {
+      if (!justFollowedUp.has(c.contactId) && isOverdue(c, now)) {
+        overdue.push(c);
+      } else {
+        regular.push(c);
+      }
+    }
+    // Oldest-overdue first so the most ignored contacts surface on top.
+    overdue.sort((a, b) => (daysSinceAnalysis(b, now) ?? 0) - (daysSinceAnalysis(a, now) ?? 0));
+    return { overdueContacts: overdue, regularContacts: regular };
+  }, [visibleContacts, justFollowedUp]);
 
   return (
     <div id="dsub-search">
@@ -126,61 +280,65 @@ export default function SearchTab({
         )}
       </div>
 
+      {/* Overdue section — shown only when there are overdue contacts and
+          the user isn't actively searching for something specific. */}
+      {!debouncedQuery && overdueContacts.length > 0 && (
+        <>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              marginBottom: '12px',
+              fontSize: '11px',
+              fontWeight: 700,
+              color: 'var(--orange)',
+              textTransform: 'uppercase',
+              letterSpacing: '1.5px',
+            }}
+          >
+            Needs follow-up
+            <span style={{ color: 'var(--muted)', fontWeight: 600, letterSpacing: 0 }}>
+              {overdueContacts.length}
+            </span>
+            <span style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+          </div>
+          <div
+            className="d-grid"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+              gap: '16px',
+              marginBottom: '24px',
+            }}
+          >
+            {overdueContacts.map((contact) =>
+              renderContactCard(contact, {
+                overdue: true,
+                onSelectContact,
+                onHideContact,
+                onMarkFollowedUp: handleMarkFollowedUp,
+              }),
+            )}
+          </div>
+          <div style={{ height: '1px', background: 'var(--border)', margin: '0 0 16px 0' }} />
+        </>
+      )}
+
       {/* Grid */}
       <div className="d-grid" id="contacts-grid" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
         gap: '16px'
       }}>
-        {visibleContacts.map(contact => (
-          <div key={contact.contactId} className="c-card card" onClick={() => onSelectContact && onSelectContact(contact)} style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px', cursor: 'pointer' }}>
-            <div className="c-hdr" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div className="c-name" style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text)' }}>
-                  {contact.fullName}
-                </div>
-                <div className="c-title" style={{ fontSize: '12px', color: 'var(--text2)' }}>
-                  {contact.position || 'No Title'}
-                </div>
-              </div>
-              {onHideContact && (
-                <HideButton contactName={contact.fullName} onHide={() => onHideContact(contact.contactId)} />
-              )}
-            </div>
-
-            <div className="c-meta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div className="c-company" style={{ fontSize: '12px', color: 'var(--orange)', fontWeight: 500 }}>
-                {contact.company || 'Unknown Company'}
-              </div>
-              {contact.email && (
-                <div className="c-email" style={{ fontSize: '11px', color: 'var(--blue)' }}>
-                  {contact.email}
-                </div>
-              )}
-            </div>
-
-            <div className="c-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: 'auto', paddingTop: '8px' }}>
-              {contact.categories?.map((tag, i) => (
-                <span key={`${tag}-${i}`} className="c-tag" style={{
-                  fontSize: '10px',
-                  padding: '4px 8px',
-                  background: 'var(--orange-dim)',
-                  color: 'var(--orange)',
-                  borderRadius: '12px',
-                  fontWeight: 500
-                }}>
-                  {tag}
-                </span>
-              ))}
-            </div>
-
-            <div style={{ marginTop: '12px', borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
-              <Link href={`/deepdive/new?contactId=${contact.contactId}`} style={{ display: 'block', textAlign: 'center', fontSize: '12px', color: 'var(--orange)', fontWeight: 600, textDecoration: 'none', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                Deep Dive<span className="hide-mobile"> Analysis</span> ⚡
-              </Link>
-            </div>
-          </div>
-        ))}
+        {(debouncedQuery ? visibleContacts : regularContacts).map((contact) =>
+          renderContactCard(contact, {
+            overdue: false,
+            onSelectContact,
+            onHideContact,
+            onMarkFollowedUp: handleMarkFollowedUp,
+          }),
+        )}
 
         {filteredContacts.length === 0 && (
           <div style={{ padding: '32px', textAlign: 'center', gridColumn: '1 / -1', color: 'var(--muted)' }}>

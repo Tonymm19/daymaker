@@ -148,6 +148,15 @@ export interface Contact {
   searchText: string; // lowercase concatenation for client search
   conversationStarters?: string[];
   startersGeneratedAt?: FirestoreTimestamp | null;
+  /** Latest time an analysis action (Deep Dive OR conversation starter
+   *  generation) was taken against this contact. Feeds the "overdue
+   *  follow-up" signal on contact lists. */
+  lastAnalyzedAt?: FirestoreTimestamp | null;
+  /** Latest time the user took an outreach action — manual mark, LinkedIn
+   *  send, or sending a draft message. When >= lastAnalyzedAt, the contact
+   *  is no longer considered overdue. */
+  lastFollowedUpAt?: FirestoreTimestamp | null;
+  followedUpVia?: 'manual' | 'linkedin' | 'draft-message';
 }
 
 export interface ParsedContact {

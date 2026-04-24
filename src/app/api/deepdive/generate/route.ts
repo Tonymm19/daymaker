@@ -368,6 +368,16 @@ Execute the 4-Round JSON Deep Dive. Remember to acknowledge the limited Target d
       createdAt: new Date()
     });
 
+    // Mark the contact as analyzed so the "needs follow-up" logic can surface
+    // them after FOLLOW_UP_WINDOW_DAYS if no outreach has happened.
+    try {
+      await adminDb.collection('users').doc(userId).collection('contacts').doc(targetContactId).update({
+        lastAnalyzedAt: new Date(),
+      });
+    } catch (err) {
+      console.warn('[DeepDive] lastAnalyzedAt write failed:', err);
+    }
+
     return NextResponse.json({ success: true, deepdiveId });
 
   } catch (err: any) {
