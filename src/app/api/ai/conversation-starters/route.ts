@@ -42,15 +42,26 @@ export async function POST(request: Request) {
 
     // Pull the user's RM persona (if connected) so starters can reference
     // topics the user is genuinely interested in rather than generic hooks.
+    // Also authoritative-read the user's goals array here rather than
+    // trusting the caller — multi-goal clients haven't all been updated yet.
     let rmBlock = '';
+    let userGoals: string[] = [];
     try {
       const userSnap = await adminDb.collection('users').doc(uid).get();
       if (userSnap.exists) {
+        const data = userSnap.data()!;
         const { buildRmContextBlockFromUser } = await import('@/lib/ai/rm-context');
-        rmBlock = buildRmContextBlockFromUser(userSnap.data() as any);
+        rmBlock = buildRmContextBlockFromUser(data as any);
+        const { getNorthStarGoals } = await import('@/lib/ai/goals');
+        userGoals = getNorthStarGoals(data);
       }
     } catch (err) {
-      console.warn('[ConversationStarters] Could not load RM context:', err);
+      console.warn('[ConversationStarters] Could not load user context:', err);
+    }
+    // Request-body northStar is the last-resort fallback if the Firestore
+    // read above failed.
+    if (userGoals.length === 0 && typeof northStar === 'string' && northStar.trim()) {
+      userGoals = [northStar.trim()];
     }
 
     const connectionTypeLabels: Record<string, string> = {
@@ -62,8 +73,11 @@ export async function POST(request: Request) {
       other: 'another helpful connection',
     };
     const seekingLabel = connectionType ? (connectionTypeLabels[connectionType] || connectionType) : '';
+    const goalsBlock = userGoals.length <= 1
+      ? `The user's overarching networking goal (North Star) is: ${userGoals[0] || 'Build meaningful professional connections.'}`
+      : `The user is pursuing multiple North Star goals simultaneously. Pick the goal most relevant to this contact and anchor the starter to it:\n${userGoals.map((g, i) => `  ${i + 1}. ${g}`).join('\n')}`;
     const goalLines = [
-      `The user's overarching networking goal (North Star) is: ${northStar || 'Build meaningful professional connections.'}`,
+      goalsBlock,
       currentGoal && currentGoal.trim() ? `The user's current goal is: ${currentGoal.trim()}` : '',
       seekingLabel ? `The user is currently seeking: ${seekingLabel}` : '',
     ].filter(Boolean).join('\n');

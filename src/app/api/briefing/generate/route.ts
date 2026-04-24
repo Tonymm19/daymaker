@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Contact, MonthlyBriefing } from '@/lib/types';
+import { getNorthStarGoals } from '@/lib/ai/goals';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,7 +52,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     const userDoc = userDocRef.data();
-    const targetNorthStar = userDoc?.northStar?.trim() || "";
+    const goals = getNorthStarGoals(userDoc || {});
+    const goalsForPrompt = goals.length === 0
+      ? '(no North Star set — assume general network growth)'
+      : goals.length === 1
+        ? goals[0]
+        : goals.map((g, i) => `${i + 1}. ${g}`).join('\n');
+    const goalsLabel = goals.length > 1 ? 'North Star Goals' : 'North Star';
 
     // 3. Fetch ALL Contacts.
     // Project only the fields the briefing logic below actually reads. Pulling
@@ -154,7 +161,9 @@ You MUST reply strictly with pure JSON. Do not use markdown backticks, do not in
 
     const userPrompt = `
 Analyze the user's networking data for the ${month} briefing window (last 30 days).
-User's Goal (North Star): "${targetNorthStar}"
+User's ${goalsLabel}:
+${goalsForPrompt}
+${goals.length > 1 ? 'When scoring, score each item against each goal and surface the highest-scoring goal in the insight. Note which goal drove the match.' : ''}
 
 Metrics provided:
 - Total Network: ${totalNetwork}

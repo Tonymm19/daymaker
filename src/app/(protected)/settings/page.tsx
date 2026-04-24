@@ -14,6 +14,7 @@ import { getAuth } from '@/lib/firebase/config';
 import { signOut } from 'firebase/auth';
 import type { DaymakerUser, RmActiveTheme, RmExpertiseArea } from '@/lib/types';
 import { FREE_QUERY_LIMIT, FREE_DEEPDIVE_LIMIT } from '@/lib/constants';
+import { MAX_NORTH_STAR_GOALS, getNorthStarGoals } from '@/lib/ai/goals';
 
 const MAX_PHOTO_BYTES = 2 * 1024 * 1024; // 2MB
 const PHOTO_TARGET_PX = 200;
@@ -55,7 +56,7 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const { userDoc, mutate, isLoading } = useUser();
   const { contacts, isLoading: contactsLoading } = useContacts();
-  const [northStarInput, setNorthStarInput] = useState('');
+  const [goalsInput, setGoalsInput] = useState<string[]>(['']);
   const [isSavingNS, setIsSavingNS] = useState(false);
   const [currentGoalInput, setCurrentGoalInput] = useState('');
   const [connectionTypeInput, setConnectionTypeInput] = useState('');
@@ -132,12 +133,16 @@ export default function SettingsPage() {
     }
   };
 
-  // Hydrate input field natively upon fetch
+  // Hydrate goals once on first fetch. Prefers the multi-goal array when
+  // present, falls back to the legacy single-goal string so users who
+  // haven't edited since multi-goal shipped see their existing goal filled.
+  const goalsHydrated = useRef(false);
   useEffect(() => {
-    if (userDoc && !northStarInput && !isSavingNS) {
-      setNorthStarInput(userDoc.northStar || '');
-    }
-  }, [userDoc, northStarInput, isSavingNS]);
+    if (!userDoc || goalsHydrated.current) return;
+    goalsHydrated.current = true;
+    const existing = getNorthStarGoals(userDoc);
+    setGoalsInput(existing.length > 0 ? existing : ['']);
+  }, [userDoc]);
 
   // Hydrate current goal + connection type on first load.
   const currentGoalHydrated = useRef(false);
@@ -172,14 +177,28 @@ export default function SettingsPage() {
     }
   }, [user?.uid, userDoc, actualContactCount, contactsLoading, mutate]);
 
+  // Derived: which goals (trimmed, non-empty, max N) will get written.
+  const cleanedGoals = goalsInput
+    .map((g) => g.trim())
+    .filter((g) => g.length > 0)
+    .slice(0, MAX_NORTH_STAR_GOALS);
+  const existingGoals = userDoc ? getNorthStarGoals(userDoc) : [];
+  const goalsDirty =
+    cleanedGoals.length !== existingGoals.length ||
+    cleanedGoals.some((g, i) => g !== existingGoals[i]);
+
   const handleSaveNorthStar = async () => {
-    if (!user || userDoc?.northStar === northStarInput) return;
+    if (!user || !goalsDirty) return;
     setIsSavingNS(true);
     try {
       const db = getDb();
       if (db) {
+        // Write both the array and the legacy single-string field so any
+        // code still reading `northStar` directly keeps working. The
+        // legacy field mirrors the first non-empty goal.
         await updateDoc(doc(db, 'users', user.uid), {
-          northStar: northStarInput,
+          northStarGoals: cleanedGoals,
+          northStar: cleanedGoals[0] || '',
           updatedAt: new Date()
         });
         await mutate();
@@ -437,29 +456,72 @@ export default function SettingsPage() {
 
           {/* North Star Section */}
           <div id="north-star" className="card" style={{ padding: '24px', scrollMarginTop: '80px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--text)' }}>North Star Goal</h3>
-              <button 
-                className="btn" 
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--text)' }}>North Star Goals</h3>
+              <button
+                className="btn"
                 onClick={handleSaveNorthStar}
-                disabled={isSavingNS || northStarInput === userDoc?.northStar}
+                disabled={isSavingNS || !goalsDirty}
                 style={{ padding: '6px 16px', fontSize: '13px' }}
               >
-                {isSavingNS ? 'Saving...' : 'Save Goal'}
+                {isSavingNS ? 'Saving...' : 'Save Goals'}
               </button>
             </div>
-            <textarea 
-              value={northStarInput}
-              onChange={(e) => setNorthStarInput(e.target.value)}
-              placeholder="What are you currently trying to achieve?"
+            <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: 'var(--text2)' }}>
+              What are you trying to accomplish? Add up to {MAX_NORTH_STAR_GOALS}.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {goalsInput.map((goal, idx) => (
+                <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                  <textarea
+                    value={goal}
+                    onChange={(e) => {
+                      const next = [...goalsInput];
+                      next[idx] = e.target.value.slice(0, 200);
+                      setGoalsInput(next);
+                    }}
+                    placeholder={idx === 0 ? "What are you currently trying to achieve?" : "Additional goal..."}
+                    maxLength={200}
+                    style={{
+                      flex: 1, minHeight: '72px', padding: '12px 14px', background: 'var(--darker)',
+                      border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px',
+                      resize: 'vertical', fontFamily: 'inherit', outline: 'none', fontSize: '14px',
+                    }}
+                  />
+                  {goalsInput.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setGoalsInput(goalsInput.filter((_, i) => i !== idx))}
+                      aria-label={`Remove goal ${idx + 1}`}
+                      style={{
+                        background: 'transparent', border: '1px solid var(--border)',
+                        color: 'var(--muted)', padding: '6px 10px', borderRadius: '6px',
+                        cursor: 'pointer', fontSize: '13px', alignSelf: 'flex-start',
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setGoalsInput([...goalsInput, ''])}
+              disabled={goalsInput.length >= MAX_NORTH_STAR_GOALS}
               style={{
-                width: '100%', minHeight: '100px', padding: '16px', background: 'var(--darker)', 
-                border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', 
-                resize: 'vertical', fontFamily: 'inherit', outline: 'none'
+                marginTop: '12px',
+                background: 'transparent',
+                border: '1px dashed var(--border)',
+                color: goalsInput.length >= MAX_NORTH_STAR_GOALS ? 'var(--muted)' : 'var(--text2)',
+                padding: '8px 14px', borderRadius: '6px', fontSize: '13px',
+                cursor: goalsInput.length >= MAX_NORTH_STAR_GOALS ? 'default' : 'pointer',
               }}
-            />
+            >
+              + Add goal
+            </button>
             <p style={{ margin: '12px 0 0 0', fontSize: '12px', color: 'var(--muted)' }}>
-              This goal anchors all AI priorities across the agent dispatch and relationship management suggestions.
+              These goals anchor all AI priorities across the agent dispatch and relationship management suggestions. When you set multiple, each contact is scored against each goal and the best match is surfaced.
             </p>
           </div>
 

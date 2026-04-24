@@ -1,5 +1,6 @@
 import { buildRmContextBlock, type RmContextFields } from '@/lib/ai/rm-context';
 import type { OnboardingAnswers } from '@/lib/types';
+import { DEFAULT_GOAL_FALLBACK } from '@/lib/ai/goals';
 
 const CONNECTION_TYPE_LABELS: Record<string, string> = {
   cofounder: 'a co-founder',
@@ -11,13 +12,18 @@ const CONNECTION_TYPE_LABELS: Record<string, string> = {
 };
 
 function formatGoalsBlock(
-  northStar: string,
+  goals: string[],
   currentGoal?: string,
   connectionType?: string,
   onboardingAnswers?: OnboardingAnswers | null,
 ): string {
   const lines: string[] = [];
-  lines.push(`- **North Star Goal**: ${northStar || 'Building a robust, high-value professional network.'}`);
+  if (goals.length <= 1) {
+    lines.push(`- **North Star Goal**: ${goals[0] || DEFAULT_GOAL_FALLBACK}`);
+  } else {
+    lines.push(`- **North Star Goals** (multiple active; score each contact against each, surface the best match):`);
+    goals.forEach((g, i) => lines.push(`    ${i + 1}. ${g}`));
+  }
   if (currentGoal && currentGoal.trim()) {
     lines.push(`- **Current Goal**: ${currentGoal.trim()}`);
   }
@@ -36,7 +42,7 @@ function formatGoalsBlock(
 
 export function buildQuerySystemPrompt(
   displayName: string,
-  northStar: string,
+  goals: string[],
   rmPersonaTraits: string[],
   contextData: any[],
   rm?: RmContextFields | null,
@@ -67,7 +73,7 @@ Your goal is to parse their network and proactively suggest high-value interacti
 
 ### Client Profile
 - **Client Name**: ${displayName}
-${formatGoalsBlock(northStar, currentGoal, connectionType, onboardingAnswers)}
+${formatGoalsBlock(goals, currentGoal, connectionType, onboardingAnswers)}
 - **Your Persona as an RM**: ${rmPersonaTraits.length > 0 ? rmPersonaTraits.join(', ') : 'Professional, insightful, strategic, and concise.'}
 ${rmBlock}
 

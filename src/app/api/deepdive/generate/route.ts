@@ -4,6 +4,7 @@ import type { Contact, DeepDive, DaymakerUser } from '@/lib/types';
 import { randomUUID } from 'crypto';
 import { callClaude, extractJson } from '@/lib/ai/claude';
 import { buildRmContextBlockFromUser } from '@/lib/ai/rm-context';
+import { getNorthStarGoals } from '@/lib/ai/goals';
 import { FREE_DEEPDIVE_LIMIT } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
@@ -145,7 +146,11 @@ export async function POST(req: Request) {
       targetContext += `\nCategories: ${targetContact.categories.join(', ')}`;
     }
 
-    let userContext = `Name: ${userDisplayName}\nNorth Star: ${userDoc.northStar || 'General networking and growth'}\n`;
+    const userGoals = getNorthStarGoals(userDoc);
+    const goalsHeader = userGoals.length <= 1
+      ? `North Star: ${userGoals[0] || 'General networking and growth'}`
+      : `North Star Goals (multiple active; score the contact against each and surface the best fit):\n${userGoals.map((g, i) => `  ${i + 1}. ${g}`).join('\n')}`;
+    let userContext = `Name: ${userDisplayName}\n${goalsHeader}\n`;
     if (userDoc.currentGoal && userDoc.currentGoal.trim()) {
       userContext += `Current Goal: ${userDoc.currentGoal.trim()}\n`;
     }

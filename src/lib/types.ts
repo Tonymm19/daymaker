@@ -45,6 +45,10 @@ export interface DaymakerUser {
    *  scanning the full contacts collection. */
   contactStats?: ContactStats;
   northStar: string;
+  /** Up to 3 simultaneous North Star goals. Authoritative when non-empty;
+   *  falls back to the single `northStar` field for users who haven't
+   *  re-saved since multi-goal shipped. Use getNorthStarGoals() to read. */
+  northStarGoals?: string[];
   /** Shorter-horizon goal: what the user is working toward right now and would
    *  accept an introduction to accelerate. Feeds into every AI prompt alongside
    *  the North Star. */

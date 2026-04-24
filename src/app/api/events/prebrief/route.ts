@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { DEFAULT_CLAUDE_MODEL, FREE_EVENT_LIMIT } from '@/lib/constants';
+import { getNorthStarGoals } from '@/lib/ai/goals';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,8 +100,13 @@ export async function POST(req: Request) {
       }, { status: 429 });
     }
 
-    // Target User North Star string
-    const targetNorthStar = userDoc.northStar?.trim() || "Identify the most strategically valuable connections for a professional networking context.";
+    // User's North Star goals (multi-goal aware, with single-goal fallback).
+    const userGoals = getNorthStarGoals(userDoc);
+    const goalsBlock = userGoals.length === 0
+      ? "Identify the most strategically valuable connections for a professional networking context."
+      : userGoals.length === 1
+        ? userGoals[0]
+        : `Multiple active North Star goals — score each attendee against each goal and anchor the recommendation to the best fit:\n${userGoals.map((g, i) => `  ${i + 1}. ${g}`).join('\n')}`;
     const currentGoal = (userDoc.currentGoal || '').trim();
     const connectionTypeLabels: Record<string, string> = {
       cofounder: 'a co-founder',
@@ -223,7 +229,8 @@ export async function POST(req: Request) {
 
       const promptContext = `
         You are an elite networking strategist. The user is attending an event called "${eventName}" in "${eventLocation || 'an unspecified location'}".
-        The user's core strategic goal (North Star) is: "${targetNorthStar}"${currentGoalBlock}
+        The user's core strategic goal (${userGoals.length > 1 ? 'North Star Goals' : 'North Star'}):
+${goalsBlock}${currentGoalBlock}
 ${rmBlock}${descriptionBlock}${urlsBlock}
 
         Use the event description and any URLs above as context about the event's theme, audience, and likely conversations so your relevance scoring and conversation starters are grounded in that context.

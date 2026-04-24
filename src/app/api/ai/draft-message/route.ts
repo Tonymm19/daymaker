@@ -15,7 +15,15 @@ export async function POST(request: Request) {
     await getAuth().verifyIdToken(token);
 
     const body = await request.json();
-    const { contactName, company, position, northStar, currentGoal, connectionType } = body;
+    const { contactName, company, position, northStar, goals, currentGoal, connectionType } = body;
+
+    // Prefer the multi-goal array when the caller provides it, else fall
+    // back to the legacy single-string field.
+    const goalsArray: string[] = Array.isArray(goals)
+      ? goals.map((g: unknown) => (typeof g === 'string' ? g.trim() : '')).filter((g: string) => g.length > 0)
+      : typeof northStar === 'string' && northStar.trim()
+        ? [northStar.trim()]
+        : [];
 
     const connectionTypeLabels: Record<string, string> = {
       cofounder: 'a co-founder',
@@ -26,8 +34,11 @@ export async function POST(request: Request) {
       other: 'another helpful connection',
     };
     const seekingLabel = connectionType ? (connectionTypeLabels[connectionType] || connectionType) : '';
+    const goalsBlock = goalsArray.length <= 1
+      ? `The user's primary networking goal (North Star) is: ${goalsArray[0] || 'Build meaningful professional connections.'}`
+      : `The user has multiple active North Star goals. Pick the one this contact best maps to and anchor the draft to it:\n${goalsArray.map((g, i) => `  ${i + 1}. ${g}`).join('\n')}`;
     const goalLines = [
-      `The user's primary networking goal (North Star) is: ${northStar || 'Build meaningful professional connections.'}`,
+      goalsBlock,
       currentGoal && String(currentGoal).trim() ? `The user's current goal is: ${String(currentGoal).trim()}` : '',
       seekingLabel ? `The user is currently seeking: ${seekingLabel}` : '',
     ].filter(Boolean).join('\n');

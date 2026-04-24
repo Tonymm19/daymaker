@@ -4,6 +4,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { callClaude } from '@/lib/ai/claude';
 import { embedQuery, retrieveRelevant } from '@/lib/ai/rag';
 import { buildQuerySystemPrompt } from '@/lib/ai/prompts/query';
+import { getNorthStarGoals } from '@/lib/ai/goals';
 import { FREE_QUERY_LIMIT, RAG_THRESHOLD, DEFAULT_TOP_K, DEFAULT_CLAUDE_MODEL } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
     const userRef = adminDb.collection('users').doc(uid);
     const currentMonth = new Date().toISOString().slice(0, 7); // e.g., '2026-04'
     
-    let northStar = '';
+    let goals: string[] = [];
     let currentGoal = '';
     let connectionType = '';
     let rmPersonaTraits: string[] = [];
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
 
         const data = userSnap.data()!;
         const isFree = data.plan === 'free';
-        northStar = data.northStar || '';
+        goals = getNorthStarGoals(data);
         currentGoal = data.currentGoal || '';
         connectionType = data.connectionType || '';
         onboardingAnswers = data.onboardingAnswers || null;
@@ -156,7 +157,7 @@ export async function POST(request: Request) {
     // 3. Prompt Construction
     const systemPrompt = buildQuerySystemPrompt(
       displayName,
-      northStar,
+      goals,
       rmPersonaTraits,
       contextData,
       rmContext,
