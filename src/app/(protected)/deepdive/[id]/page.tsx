@@ -21,6 +21,7 @@ export default function DeepDiveView() {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenError, setRegenError] = useState('');
   const [showRegenConfirm, setShowRegenConfirm] = useState(false);
+  const [factorsOpen, setFactorsOpen] = useState(false);
 
   // Open the confirm modal. The actual regenerate work lives in
   // handleRegenerate below; the modal's Regenerate button invokes it.
@@ -140,12 +141,75 @@ export default function DeepDiveView() {
           </div>
           <div>
             <div style={{ fontSize: '24px', fontFamily: "'JetBrains Mono', monospace", color: 'var(--text)', marginBottom: '4px' }}>{deepDive.topSynergies?.length || 0}</div>
-            <div style={{ fontSize: '12px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Key<br/>Synergies</div>
+            <div style={{ fontSize: '12px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Alignment<br/>Areas</div>
           </div>
         </div>
       </div>
 
-      <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '-20px', marginBottom: '32px', fontStyle: 'italic' }}>
+      {/* Score transparency: one-line summary + expandable factor breakdown.
+          Pre-existing deep dives (generated before the factors prompt shipped)
+          have neither field, so this whole block is guarded. */}
+      {(deepDive.scoreSummary || (deepDive.scoreFactors && deepDive.scoreFactors.length > 0)) && (
+        <div className="card" style={{ padding: '20px 24px', marginBottom: '24px', background: 'var(--surface-color)', border: '1px solid var(--border)' }}>
+          {deepDive.scoreSummary && (
+            <div style={{ fontSize: '14px', lineHeight: 1.55, color: 'var(--text)' }}>
+              {deepDive.scoreSummary}
+            </div>
+          )}
+          {deepDive.scoreFactors && deepDive.scoreFactors.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setFactorsOpen((v) => !v)}
+                aria-expanded={factorsOpen}
+                style={{
+                  marginTop: deepDive.scoreSummary ? '12px' : 0,
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  color: 'var(--orange)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  letterSpacing: '0.5px',
+                  textTransform: 'uppercase',
+                  cursor: 'pointer',
+                }}
+              >
+                {factorsOpen ? '− Hide factor breakdown' : '+ Why this score?'}
+              </button>
+              {factorsOpen && (
+                <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {deepDive.scoreFactors.map((f) => {
+                    const fillPct = f.weight > 0 ? (f.contribution / f.weight) * 100 : 0;
+                    return (
+                      <div key={f.name}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text2)', marginBottom: '4px' }}>
+                          <span>{f.name}</span>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--text)' }}>
+                            {f.contribution}<span style={{ color: 'var(--muted)' }}> / {f.weight}</span>
+                          </span>
+                        </div>
+                        <div style={{ width: '100%', height: '6px', background: 'var(--darker)', borderRadius: '3px', overflow: 'hidden' }}>
+                          <div
+                            style={{
+                              width: `${Math.max(0, Math.min(100, fillPct))}%`,
+                              height: '100%',
+                              background: 'var(--orange)',
+                              transition: 'width 0.3s ease',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '32px', fontStyle: 'italic' }}>
         Based on imported LinkedIn data. For full mutual connection data, check LinkedIn directly.
       </div>
 

@@ -201,14 +201,17 @@ Execute the following 4-Round sequence:
 - Round 4: Action Recommendations (Specific steps for both parties)
 
 SCORING TRANSPARENCY:
-When assigning the alignment score (emitted as the synergyScore JSON field for backward compatibility), explain the specific factors that drove the score. Weigh these dimensions explicitly:
-1. Relevance to the user's North Star AND Current Goal — does the target advance either? The Current Goal / Seeking preference (if provided) should carry at least as much weight as the North Star.
-2. Seniority / influence level — how much decision-making power does the target appear to have?
-3. Industry overlap — do their domains intersect with the user's work or network?
-4. Recency of the connection — use the Connected On date provided. Recent (≤2 years) is stronger signal than old (>5 years).
-5. Current vs outdated position — does the position look up-to-date?
+When assigning the alignment score (emitted as the synergyScore JSON field for backward compatibility), break the score into exactly these four weighted factors and report each factor's actual contribution (0..weight) based on how this specific target performed on that dimension:
+- Goal Match (weight 40): How directly this contact aligns with the user's stated North Star goal(s). Current Goal / Seeking preference (if provided) should carry at least as much weight as the North Star within this factor. When the user has multiple North Star goals, the best-matching goal determines this factor's contribution — name the goal.
+- Career Relevance (weight 30): Seniority, decision-making power, and the target's current role, company, or trajectory relative to the user's needs.
+- Network Overlap (weight 20): Shared companies, industries, mutual context, or bridgeable relationships with the user.
+- Activity Recency (weight 10): Freshness of the connection (use the Connected On date) and whether the position looks current vs outdated. Recent (≤2 years, current role) scores high; stale (>5 years, possibly outdated) scores low.
 
-The executiveSummary MUST briefly name the factors that pushed the score up or down (e.g. "Score reduced by stale 7-year-old connection and generic title; lifted by strong North Star alignment."). When the user has multiple North Star goals, name which goal drove the match.
+The sum of the four contributions should roughly equal synergyScore.
+
+Also produce a scoreSummary: one plain-language sentence that reads like something a thoughtful chief of staff would write. It should name the factor(s) that moved the score most (e.g. "Strong North Star alignment and current role, dragged down by stale 7-year-old connection.").
+
+The executiveSummary is separate and may be a full paragraph; the scoreSummary is one sentence that explains the number specifically.
 
 DATA FRESHNESS:
 If the target's LinkedIn data appears outdated — no previousCompany change captured, connected many years ago (>5y) with a junior or generic title, or a position that reads as a past role — factor this into a LOWER score and call it out in the executiveSummary and Round 1 User Agent message. Include the Connected On date in your analysis context when discussing recency.
@@ -218,6 +221,13 @@ Return your output EXCLUSIVELY in the exact JSON format specified below. Do not 
 {
   "executiveSummary": "<A cohesive 1-paragraph summary of the dynamic relationship>",
   "synergyScore": <Integer 0-100 indicating alignment strength>,
+  "scoreSummary": "<ONE sentence plain-language explanation of what drove this specific score>",
+  "scoreFactors": [
+    { "name": "Goal Match",       "weight": 40, "contribution": <integer 0-40> },
+    { "name": "Career Relevance", "weight": 30, "contribution": <integer 0-30> },
+    { "name": "Network Overlap",  "weight": 20, "contribution": <integer 0-20> },
+    { "name": "Activity Recency", "weight": 10, "contribution": <integer 0-10> }
+  ],
   "topSynergies": [
     {
       "area": "<Title of alignment area>",
@@ -319,6 +329,22 @@ Execute the 4-Round JSON Deep Dive. Remember to acknowledge the limited Target d
 
     // 5. Structure & Persistence
     const deepdiveId = randomUUID();
+    // Validate scoreFactors minimally: accept the array only when it has the
+    // expected four factors with numeric weights/contributions. Pre-existing
+    // prompts that don't return factors just drop through with undefined.
+    const rawFactors = Array.isArray(parsedData.scoreFactors) ? parsedData.scoreFactors : null;
+    const scoreFactors = rawFactors
+      ? rawFactors
+          .filter((f: any) => f && typeof f.name === 'string' && typeof f.weight === 'number' && typeof f.contribution === 'number')
+          .map((f: any) => ({
+            name: String(f.name),
+            weight: Math.max(0, Math.min(100, Math.round(f.weight))),
+            contribution: Math.max(0, Math.min(100, Math.round(f.contribution))),
+          }))
+      : undefined;
+    const scoreSummary = typeof parsedData.scoreSummary === 'string' && parsedData.scoreSummary.trim()
+      ? parsedData.scoreSummary.trim()
+      : undefined;
     const newDeepDive: DeepDive = {
       deepdiveId,
       userId,
@@ -332,7 +358,9 @@ Execute the 4-Round JSON Deep Dive. Remember to acknowledge the limited Target d
       actionItems: parsedData.actionItems || [],
       rounds: parsedData.rounds || [],
       executiveSummary: parsedData.executiveSummary || 'No summary generated.',
-      createdAt: new Date() as any // Admin SDK mapping
+      createdAt: new Date() as any, // Admin SDK mapping
+      ...(scoreSummary ? { scoreSummary } : {}),
+      ...(scoreFactors && scoreFactors.length > 0 ? { scoreFactors } : {}),
     };
 
     await adminDb.collection('users').doc(userId).collection('deepdives').doc(deepdiveId).set({

@@ -234,7 +234,7 @@ export interface DeepDive {
   targetContactId: string;
   targetName: string;
   targetCompany: string;
-  synergyScore: number; // 0-100
+  synergyScore: number; // 0-100 (alignment score; field kept for back-compat)
   mutualConnections: number;
   sharedCompanies: string[];
   topSynergies: SynergyArea[];
@@ -242,6 +242,18 @@ export interface DeepDive {
   rounds: DeepDiveRound[];
   executiveSummary: string;
   createdAt: FirestoreTimestamp;
+  /** One-sentence plain-language explanation of what drove the score.
+   *  Optional; pre-existing deep dives may not have it. */
+  scoreSummary?: string;
+  /** Factor breakdown surfaced in the expandable "Why this score?" section.
+   *  Optional; weights sum to 100, contributions sum to roughly synergyScore. */
+  scoreFactors?: AlignmentFactor[];
+}
+
+export interface AlignmentFactor {
+  name: string;
+  weight: number;       // percentage of total score this factor accounts for
+  contribution: number; // points this factor actually earned (0..weight)
 }
 
 export interface SynergyArea {
