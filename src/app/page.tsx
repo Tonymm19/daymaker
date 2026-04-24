@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { BRAND } from '@/lib/brand.config';
+import SegmentTabs from '@/components/landing/SegmentTabs';
 
 // Warm dusk editorial palette, scoped to this page via inline styles so
 // the logged-in product's navy theme is unaffected.
@@ -184,19 +185,7 @@ export default function LandingPage() {
               </span>
             </h1>
 
-            <p
-              style={{
-                fontSize: '18px',
-                lineHeight: 1.55,
-                color: C.text2,
-                maxWidth: '540px',
-                margin: '0 0 32px 0',
-              }}
-            >
-              Daymaker reads your entire LinkedIn network and helps you find the right people
-              in seconds, for events, outreach, fundraising, intros, or anything else worth
-              asking.
-            </p>
+            <SegmentTabs accent={C.accent} text={C.text} text2={C.text2} muted={C.muted} />
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
               <Link
