@@ -53,10 +53,15 @@ Daymaker Connect is an AI-powered network intelligence platform that helps profe
 - No credit card required.
 
 ### Pro Subscription
-- $29.00 USD per month, billed monthly through Stripe.
+- $39.00 USD per month, billed monthly through Stripe.
 - Access to all features with expanded usage limits.
 - You may cancel at any time through your account Settings or the Stripe Customer Portal.
 - Cancellation takes effect at the end of the current billing period. No prorated refunds are provided for partial months.
+
+### Annual Launch Offer
+- A limited-time launch offer of $199.00 USD for the first year, billed annually through Stripe.
+- After the first year, the subscription renews at the standard $39.00 USD per month rate unless canceled.
+- Cancellation takes effect at the end of the current paid year. No prorated refunds.
 
 ### Price Changes
 - We may adjust subscription pricing with 30 days advance notice.

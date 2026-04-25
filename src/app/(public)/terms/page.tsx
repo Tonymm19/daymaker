@@ -78,8 +78,14 @@ export default function TermsPage() {
           Stripe, and includes unlimited queries and full network access.
         </li>
         <li>
-          Paid subscriptions renew monthly until canceled. You can cancel any time from the
-          billing portal; access continues until the end of the current billing cycle.
+          A limited-time <strong>Annual Launch Offer</strong> is available at $
+          {BRAND.proPriceAnnualLaunch} for the first year, after which the subscription renews
+          at the standard ${BRAND.proPriceMonthly}/month rate.
+        </li>
+        <li>
+          Paid subscriptions renew until canceled. You can cancel any time from the billing
+          portal; access continues until the end of the current billing cycle (monthly or
+          annual). No prorated refunds.
         </li>
         <li>
           Fees are non-refundable except where required by law. We may change pricing with at

@@ -65,6 +65,7 @@ export default function LandingPage() {
         .landing-v2 .lv2-sec4-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
         .landing-v2 .lv2-sec5-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
         .landing-v2 .lv2-sec6-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+        .landing-v2 .lv2-pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: stretch; }
         .landing-v2 .lv2-h2-large { font-size: 36px; line-height: 1.15; letter-spacing: -0.8px; }
         .landing-v2 .lv2-final-h2 { font-size: 42px; line-height: 1.15; letter-spacing: -0.8px; }
         @media (max-width: 768px) {
@@ -80,6 +81,7 @@ export default function LandingPage() {
           .landing-v2 .lv2-sec4-grid { grid-template-columns: 1fr; gap: 40px; }
           .landing-v2 .lv2-sec5-grid { grid-template-columns: 1fr; gap: 32px; }
           .landing-v2 .lv2-sec6-grid { grid-template-columns: 1fr; }
+          .landing-v2 .lv2-pricing-grid { grid-template-columns: 1fr; gap: 16px; }
           .landing-v2 .lv2-h2-large { font-size: 28px; letter-spacing: -0.5px; }
           .landing-v2 .lv2-final-h2 { font-size: 30px; letter-spacing: -0.5px; }
           .landing-v2 .lv2-footer-row { flex-direction: column; align-items: center; text-align: center; gap: 12px; }
@@ -895,6 +897,90 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Section 6.5: Pricing ──────────────────────────── */}
+      <section
+        id="pricing"
+        className="lv2-shell lv2-sec-pad"
+        style={{ background: C.bg }}
+      >
+        <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '2px',
+                textTransform: 'uppercase',
+                color: C.accent,
+                marginBottom: '16px',
+              }}
+            >
+              Simple pricing
+            </div>
+            <h2
+              className="lv2-h2-large"
+              style={{
+                fontFamily: SERIF,
+                fontWeight: 400,
+                color: C.text,
+                margin: '0 auto',
+                maxWidth: '720px',
+              }}
+            >
+              Two ways to use{' '}
+              <span style={{ fontStyle: 'italic', color: C.accent }}>Daymaker.</span>
+            </h2>
+          </div>
+
+          <div className="lv2-pricing-grid">
+            <PricingCard
+              name="Free"
+              price="Free"
+              cadence="Forever"
+              features={[
+                '3 AI queries per month',
+                '1 Deep Dive per month',
+                'Monthly briefing',
+                'Up to 500 contacts',
+                'AI conversation starters',
+              ]}
+              ctaLabel="Get started"
+              ctaHref="/signup"
+            />
+            <PricingCard
+              name="Pro"
+              price="$39"
+              cadence="per month"
+              features={[
+                'Unlimited AI queries',
+                'Unlimited Deep Dives',
+                'Unlimited event briefings',
+                'Calendar integration',
+                'Priority support',
+              ]}
+              ctaLabel="Get Daymaker"
+              ctaHref="/signup"
+            />
+            <PricingCard
+              name="Pro Annual"
+              price="$199"
+              cadence="for your first year"
+              ribbon="Launch offer"
+              footnote="$199 first year, then $39/month. Limited-time launch pricing."
+              features={[
+                'Everything in Pro',
+                'Locked-in launch rate',
+                'Two months free vs. monthly',
+                'Cancel anytime, no proration',
+              ]}
+              ctaLabel="Lock in launch pricing"
+              ctaHref="/signup"
+              highlighted
+            />
+          </div>
+        </div>
+      </section>
+
       {/* ── Section 7: FAQ ────────────────────────────────── */}
       <section
         className="lv2-shell lv2-sec-pad"
@@ -953,9 +1039,13 @@ export default function LandingPage() {
               a="ChatGPT has no idea who's in your network. Daymaker is purpose-built to read, understand, and query your specific LinkedIn contacts, with memory, context, and event-aware workflows ChatGPT doesn't have."
             />
             <FaqItem
-              last
               q="Can I cancel anytime?"
               a={'Yes. Monthly plan, no commitment. Cancel anytime from your settings and your plan continues through the end of your current billing period. No retention emails, no "are you sure" loops.'}
+            />
+            <FaqItem
+              last
+              q="What about the annual plan?"
+              a="Same. Cancel anytime, your plan continues through the end of your paid year, no prorated refunds. The launch rate covers your first year. After that, it renews at the standard $39/month."
             />
           </div>
         </div>
@@ -1398,6 +1488,153 @@ function TrustCard({ title, body }: { title: string; body: string }) {
       <p style={{ fontSize: '14px', lineHeight: 1.65, color: C.text2, margin: 0 }}>
         {body}
       </p>
+    </div>
+  );
+}
+
+function PricingCard({
+  name,
+  price,
+  cadence,
+  features,
+  ctaLabel,
+  ctaHref,
+  highlighted,
+  ribbon,
+  footnote,
+}: {
+  name: string;
+  price: string;
+  cadence: string;
+  features: string[];
+  ctaLabel: string;
+  ctaHref: string;
+  highlighted?: boolean;
+  ribbon?: string;
+  footnote?: string;
+}) {
+  return (
+    <div
+      style={{
+        position: 'relative',
+        background: highlighted ? C.surface : C.surface,
+        border: `1px solid ${highlighted ? C.accent : C.border}`,
+        borderRadius: '12px',
+        padding: '28px 24px',
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: highlighted ? '0 8px 32px rgba(232, 138, 60, 0.12)' : 'none',
+      }}
+    >
+      {ribbon && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '-11px',
+            left: '24px',
+            background: C.accent,
+            color: '#1a1310',
+            fontSize: '10px',
+            fontWeight: 700,
+            letterSpacing: '1.6px',
+            textTransform: 'uppercase',
+            padding: '4px 10px',
+            borderRadius: '999px',
+          }}
+        >
+          {ribbon}
+        </div>
+      )}
+
+      <div
+        style={{
+          fontSize: '11px',
+          fontWeight: 700,
+          letterSpacing: '2px',
+          textTransform: 'uppercase',
+          color: highlighted ? C.accent : C.text3,
+          marginBottom: '14px',
+        }}
+      >
+        {name}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '6px' }}>
+        <div
+          style={{
+            fontFamily: SERIF,
+            fontSize: '44px',
+            lineHeight: 1,
+            color: C.text,
+            fontWeight: 400,
+          }}
+        >
+          {price}
+        </div>
+      </div>
+      <div style={{ fontSize: '13px', color: C.text3, marginBottom: '20px' }}>{cadence}</div>
+
+      <ul
+        style={{
+          listStyle: 'none',
+          padding: 0,
+          margin: '0 0 24px 0',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+          flexGrow: 1,
+        }}
+      >
+        {features.map((f) => (
+          <li
+            key={f}
+            style={{
+              fontSize: '14px',
+              lineHeight: 1.5,
+              color: C.text2,
+              display: 'flex',
+              gap: '10px',
+            }}
+          >
+            <span style={{ color: C.accent, flexShrink: 0 }}>·</span>
+            <span>{f}</span>
+          </li>
+        ))}
+      </ul>
+
+      {footnote && (
+        <div
+          style={{
+            fontSize: '12px',
+            lineHeight: 1.5,
+            color: C.text3,
+            marginBottom: '16px',
+            paddingTop: '12px',
+            borderTop: `1px solid ${C.border}`,
+          }}
+        >
+          {footnote}
+        </div>
+      )}
+
+      <Link
+        href={ctaHref}
+        style={{
+          display: 'inline-flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: '12px 20px',
+          borderRadius: '8px',
+          background: highlighted ? C.accent : 'transparent',
+          color: highlighted ? '#1a1310' : C.text,
+          border: highlighted ? `1px solid ${C.accent}` : `1px solid ${C.border}`,
+          fontSize: '14px',
+          fontWeight: 600,
+          letterSpacing: '-0.1px',
+        }}
+      >
+        {ctaLabel}
+      </Link>
     </div>
   );
 }

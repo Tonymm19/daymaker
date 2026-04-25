@@ -24,9 +24,34 @@ export const BRAND = {
   companyUrl: 'https://ignitia-ai.com',
   
   // Pricing
-  proPriceMonthly: 29,
+  proPriceMonthly: 39,
   proPriceCurrency: 'USD',
-  
+  proPriceAnnualLaunch: 199,
+
+  // Pricing display structure for marketing surfaces.
+  pricing: {
+    free: {
+      name: 'Free',
+      price: 0,
+      displayPrice: 'Free',
+      cadence: 'forever',
+    },
+    paid: {
+      name: 'Pro',
+      price: 39,
+      displayPrice: '$39',
+      cadence: 'month',
+    },
+    annualLaunchOffer: {
+      name: 'Annual Launch Offer',
+      price: 199,
+      displayPrice: '$199',
+      cadence: 'year',
+      isLimitedTime: true,
+      framingCopy: 'Limited-time launch pricing',
+    },
+  },
+
   // Plan names. All limits are per calendar month and reset with the user's
   // `currentMonthString` rollover. Infinity = unlimited.
   plans: {
