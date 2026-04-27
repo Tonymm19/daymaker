@@ -81,22 +81,11 @@ export default function DashboardPage() {
   const [phaseProgress, setPhaseProgress] = useState<{ done: number; total: number } | null>(null);
   const isProcessing = processingPhase !== null;
 
-  const handleCheckout = async () => {
-    if (!user) return;
-    try {
-      const auth = getAuth();
-      const token = await auth?.currentUser?.getIdToken();
-      const res = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch (err) {
-      console.error("Checkout failed", err);
-    }
+  // Cadence (monthly vs annual) is chosen on the Settings page where the
+  // toggle UI lives. Banner CTA navigates there instead of starting a
+  // single-cadence checkout.
+  const goToBilling = () => {
+    if (typeof window !== 'undefined') window.location.href = '/settings';
   };
 
   // Inner embedding loop — no lifecycle management so it can be chained from
@@ -435,7 +424,7 @@ export default function DashboardPage() {
                 <h4 style={{ margin: '0 0 4px 0', color: 'var(--text)', fontSize: '15px' }}>Unlock Unlimited AI Intelligence</h4>
                 <div style={{ fontSize: '13px', color: 'var(--text2)' }}>Free tier: 3 AI queries, 1 Deep Dive, 0 event briefings per month. Upgrade for unlimited access.</div>
               </div>
-              <button onClick={handleCheckout} className="btn" style={{ padding: '8px 16px', fontSize: '13px', textDecoration: 'none' }}>
+              <button onClick={goToBilling} className="btn" style={{ padding: '8px 16px', fontSize: '13px', textDecoration: 'none' }}>
                 Upgrade to Pro
               </button>
             </div>

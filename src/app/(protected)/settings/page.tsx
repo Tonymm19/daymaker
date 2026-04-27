@@ -15,6 +15,7 @@ import { signOut } from 'firebase/auth';
 import type { DaymakerUser, RmActiveTheme, RmExpertiseArea } from '@/lib/types';
 import { FREE_QUERY_LIMIT, FREE_DEEPDIVE_LIMIT } from '@/lib/constants';
 import { MAX_NORTH_STAR_GOALS, getNorthStarGoals } from '@/lib/ai/goals';
+import { BRAND } from '@/lib/brand.config';
 
 const MAX_PHOTO_BYTES = 2 * 1024 * 1024; // 2MB
 const PHOTO_TARGET_PX = 200;
@@ -63,6 +64,8 @@ export default function SettingsPage() {
   const [isSavingCG, setIsSavingCG] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
+  // Default to 'annual' so the launch-offer pricing leads (Tony's call).
+  const [selectedCadence, setSelectedCadence] = useState<'monthly' | 'annual'>('annual');
   const [errorMsg, setErrorMsg] = useState('');
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState('');
@@ -305,20 +308,24 @@ export default function SettingsPage() {
     }
   };
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (cadence: 'monthly' | 'annual') => {
     setStripeLoading(true);
     setErrorMsg('');
     try {
       const auth = getAuth();
       const token = await auth?.currentUser?.getIdToken();
-      
+
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ cadence }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Checkout failed');
-      
+
       window.location.href = data.url;
     } catch (err: any) {
       setErrorMsg(err.message);
@@ -661,27 +668,103 @@ export default function SettingsPage() {
           {/* Plan & Billing */}
           <div className="card" style={{ padding: '24px' }}>
             <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', color: 'var(--text)' }}>Plan & Billing</h3>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', background: 'var(--darker)', border: '1px solid var(--border)', borderRadius: '8px' }}>
-              <div>
-                <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text)', textTransform: 'capitalize' }}>
-                  {userDoc?.plan || 'Free'} Plan
+
+            {isPro ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', background: 'var(--darker)', border: '1px solid var(--border)', borderRadius: '8px', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text)' }}>
+                    Pro plan, {userDoc?.subscriptionCadence === 'annual' ? 'annual' : 'monthly'} billing
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--muted)', marginTop: '4px' }}>
+                    Unlimited queries, Deep Dives, and event briefings.
+                  </div>
+                  {userDoc?.subscriptionCurrentPeriodEnd ? (
+                    <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '6px' }}>
+                      {userDoc?.stripeSubscriptionStatus === 'canceled'
+                        ? 'Access continues until '
+                        : 'Renews '}
+                      {new Date(userDoc.subscriptionCurrentPeriodEnd.seconds * 1000).toLocaleDateString()}
+                      {userDoc?.subscriptionCadence === 'annual'
+                        ? '. Cancel anytime, your plan continues through the end of your paid year, no prorated refunds.'
+                        : '.'}
+                    </div>
+                  ) : null}
                 </div>
-                <div style={{ fontSize: '13px', color: 'var(--muted)', marginTop: '4px' }}>
-                  {isPro ? 'Unlimited queries, Deep Dives, and event briefings.' : '3 AI queries, 1 Deep Dive, 0 event briefings per month.'}
+                <button onClick={handlePortal} disabled={stripeLoading} className="btn" style={{ background: 'var(--dark)', color: 'var(--text)', border: '1px solid var(--border)' }}>
+                  {stripeLoading ? 'Loading...' : 'Manage Subscription'}
+                </button>
+              </div>
+            ) : (
+              <div style={{ padding: '16px', background: 'var(--darker)', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text)' }}>Free Plan</div>
+                <div style={{ fontSize: '13px', color: 'var(--muted)', marginTop: '4px', marginBottom: '16px' }}>
+                  3 AI queries, 1 Deep Dive, 0 event briefings per month.
                 </div>
-              </div>
-              <div>
-                {isPro ? (
-                  <button onClick={handlePortal} disabled={stripeLoading} className="btn" style={{ background: 'var(--dark)', color: 'var(--text)', border: '1px solid var(--border)' }}>
-                    {stripeLoading ? 'Loading...' : 'Manage Subscription'}
+
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCadence('annual')}
+                    aria-pressed={selectedCadence === 'annual'}
+                    style={{
+                      flex: '1 1 200px',
+                      padding: '12px 14px',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      background: selectedCadence === 'annual' ? 'var(--accent-soft, rgba(249, 148, 30, 0.12))' : 'var(--dark)',
+                      border: `1px solid ${selectedCadence === 'annual' ? 'var(--accent)' : 'var(--border)'}`,
+                      color: 'var(--text)',
+                    }}
+                  >
+                    <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--accent)', fontWeight: 700, marginBottom: '4px' }}>
+                      Annual launch offer
+                    </div>
+                    <div style={{ fontSize: '15px', fontWeight: 600 }}>${BRAND.proPriceAnnualLaunch}/year</div>
+                    <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
+                      Save ${BRAND.proPriceMonthly * 12 - BRAND.proPriceAnnualLaunch} vs monthly. Limited time.
+                    </div>
                   </button>
-                ) : (
-                  <button onClick={handleCheckout} disabled={stripeLoading} className="btn">
-                    {stripeLoading ? 'Loading...' : 'Upgrade to Pro — $29/mo'}
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCadence('monthly')}
+                    aria-pressed={selectedCadence === 'monthly'}
+                    style={{
+                      flex: '1 1 200px',
+                      padding: '12px 14px',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      background: selectedCadence === 'monthly' ? 'var(--accent-soft, rgba(249, 148, 30, 0.12))' : 'var(--dark)',
+                      border: `1px solid ${selectedCadence === 'monthly' ? 'var(--accent)' : 'var(--border)'}`,
+                      color: 'var(--text)',
+                    }}
+                  >
+                    <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--muted)', fontWeight: 700, marginBottom: '4px' }}>
+                      Monthly
+                    </div>
+                    <div style={{ fontSize: '15px', fontWeight: 600 }}>${BRAND.proPriceMonthly}/month</div>
+                    <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
+                      Cancel anytime.
+                    </div>
                   </button>
-                )}
+                </div>
+
+                <button
+                  onClick={() => handleCheckout(selectedCadence)}
+                  disabled={stripeLoading}
+                  className="btn"
+                  style={{ width: '100%' }}
+                >
+                  {stripeLoading
+                    ? 'Loading...'
+                    : selectedCadence === 'annual'
+                      ? `Upgrade to Pro, $${BRAND.proPriceAnnualLaunch}/year`
+                      : `Upgrade to Pro, $${BRAND.proPriceMonthly}/month`}
+                </button>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Usage This Month */}

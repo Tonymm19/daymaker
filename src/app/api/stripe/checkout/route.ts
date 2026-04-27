@@ -22,11 +22,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'DB uninitialized' }, { status: 500 });
     }
 
-    const priceId = process.env.STRIPE_PRICE_ID;
+    // Cadence comes from the request body. Default to 'monthly' so older
+    // callers that don't send a body still hit a valid Price.
+    const body = await request.json().catch(() => ({}));
+    const cadence: 'monthly' | 'annual' = body?.cadence === 'annual' ? 'annual' : 'monthly';
+
+    const priceId = cadence === 'annual'
+      ? process.env.STRIPE_PRICE_ID_ANNUAL
+      : process.env.STRIPE_PRICE_ID_MONTHLY;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
     if (!priceId) {
-      return NextResponse.json({ error: 'STRIPE_PRICE_ID not set' }, { status: 500 });
+      const envName = cadence === 'annual' ? 'STRIPE_PRICE_ID_ANNUAL' : 'STRIPE_PRICE_ID_MONTHLY';
+      return NextResponse.json({ error: `${envName} not set` }, { status: 500 });
     }
 
     // Get Firebase user
@@ -73,6 +81,13 @@ export async function POST(request: Request) {
       cancel_url: `${appUrl}/settings`,
       metadata: {
         firebaseUID: uid,
+        cadence,
+      },
+      subscription_data: {
+        metadata: {
+          firebaseUID: uid,
+          cadence,
+        },
       },
     });
 

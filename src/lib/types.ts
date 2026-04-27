@@ -38,6 +38,19 @@ export interface DaymakerUser {
   plan: PlanType;
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
+  /** The Stripe Price ID the active subscription is on. Compared against
+   *  STRIPE_PRICE_ID_MONTHLY / STRIPE_PRICE_ID_ANNUAL to determine cadence. */
+  stripePriceId?: string | null;
+  /** Billing cadence the user picked at checkout. Saved by the webhook when
+   *  the subscription is created or updated, so the UI can show "monthly"
+   *  vs. "annual" without round-tripping to Stripe. */
+  subscriptionCadence?: 'monthly' | 'annual' | null;
+  /** Mirrors Stripe's subscription.status ('active' | 'trialing' | 'past_due'
+   *  | 'canceled' | etc). Used by admin/set-plan and the billing UI. */
+  stripeSubscriptionStatus?: string | null;
+  /** End of the current paid period (renewal date for active, cutoff for
+   *  canceled). Set from subscription.current_period_end (seconds). */
+  subscriptionCurrentPeriodEnd?: FirestoreTimestamp | null;
   linkedInImportedAt: FirestoreTimestamp | null;
   contactCount: number;
   /** Cached aggregate counts for the stats bar. Refreshed on import/reset and
