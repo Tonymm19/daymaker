@@ -160,7 +160,7 @@ export default function TermsPage() {
       <h2>14. Contact</h2>
       <p>
         Questions about these Terms? Reach us at{' '}
-        <a href="mailto:legal@daymakerconnect.com">legal@daymakerconnect.com</a>.
+        <a href="mailto:support@daymakerconnect.com">support@daymakerconnect.com</a>.
       </p>
     </LegalPage>
   );
