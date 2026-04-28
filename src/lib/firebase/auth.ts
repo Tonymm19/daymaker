@@ -15,6 +15,9 @@ import {
   GoogleAuthProvider,
   signOut as firebaseSignOut,
   onAuthStateChanged as firebaseOnAuthStateChanged,
+  sendPasswordResetEmail as firebaseSendPasswordResetEmail,
+  verifyPasswordResetCode as firebaseVerifyPasswordResetCode,
+  confirmPasswordReset as firebaseConfirmPasswordReset,
   updateProfile,
   type User,
 } from 'firebase/auth';
@@ -118,6 +121,62 @@ export async function signInWithGoogle(): Promise<{
     const provider = new GoogleAuthProvider();
     const credential = await signInWithPopup(auth, provider);
     await ensureUserDocument(credential.user.uid, credential.user.email, credential.user.displayName);
+    return { success: true };
+  } catch (error: unknown) {
+    const authError = error as AuthError;
+    return { success: false, error: authError };
+  }
+}
+
+/**
+ * Send a password reset email to the given address.
+ * Firebase will send the email even if the address is not registered,
+ * for privacy reasons. The action link in the email points back to the
+ * `/auth/action` route configured in Firebase Console.
+ */
+export async function sendPasswordReset(
+  email: string
+): Promise<{ success: boolean; error?: AuthError }> {
+  const auth = getAuth();
+  if (!auth) return { success: false, error: NOT_CONFIGURED_ERROR };
+  try {
+    await firebaseSendPasswordResetEmail(auth, email);
+    return { success: true };
+  } catch (error: unknown) {
+    const authError = error as AuthError;
+    return { success: false, error: authError };
+  }
+}
+
+/**
+ * Verify a password reset code from a Firebase action link.
+ * Returns the email associated with the code if valid.
+ */
+export async function verifyResetCode(
+  oobCode: string
+): Promise<{ success: boolean; email?: string; error?: AuthError }> {
+  const auth = getAuth();
+  if (!auth) return { success: false, error: NOT_CONFIGURED_ERROR };
+  try {
+    const email = await firebaseVerifyPasswordResetCode(auth, oobCode);
+    return { success: true, email };
+  } catch (error: unknown) {
+    const authError = error as AuthError;
+    return { success: false, error: authError };
+  }
+}
+
+/**
+ * Complete a password reset using the action code and a new password.
+ */
+export async function confirmReset(
+  oobCode: string,
+  newPassword: string
+): Promise<{ success: boolean; error?: AuthError }> {
+  const auth = getAuth();
+  if (!auth) return { success: false, error: NOT_CONFIGURED_ERROR };
+  try {
+    await firebaseConfirmPasswordReset(auth, oobCode, newPassword);
     return { success: true };
   } catch (error: unknown) {
     const authError = error as AuthError;
